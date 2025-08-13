@@ -1,0 +1,13 @@
+.ipynb_checkpoints
+.mypy_cache
+.vscode
+__pycache__
+.pytest_cache
+.env
+.DS_Store
+docker-compose.yml
+test.db
+testing_*
+*.xlsx
+venv/
+*.log

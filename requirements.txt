@@ -1,0 +1,13 @@
+# Core dependencies for ParrotAI and dataset creation
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.21.0
+bitsandbytes>=0.41.0
+tqdm>=4.65.0
+
+# HuggingFace API support
+huggingface-hub>=0.17.0
+python-dotenv>=1.0.0
+
+# Optional but recommended for better performance
+flash-attn>=2.3.0  # For faster attention computation
