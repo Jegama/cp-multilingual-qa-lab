@@ -58,44 +58,63 @@ def setup_logging(log_level='INFO'):
     return logger
 
 
-def load_and_format_gotquestions(file_path):
+def load_and_format_gotquestions(file_path, lang="ar"):
     """
-    Load the gotquestions JSON file and format it into conversation pairs.
-    
+    Load a gotquestions JSON file (Arabic or English) and format it into conversation pairs.
+
     Args:
         file_path (str): Path to the JSON file
-        
+        lang (str): 'ar' for Arabic structure, 'en' for English structure
+
     Returns:
-        list: List of conversation dictionaries with 'content' and 'role' keys
+        list: List of conversation pairs (each pair is a list of dicts with 'role' and 'content')
     """
     with open(file_path, 'r', encoding='utf-8') as file:
         data = json.load(file)
-    
-    conversations = []
-    
-    # Iterate through each category
-    for category in data:
-        category_name = category.get('name', '')
-        articles = category.get('articles', [])
-        
-        # Process each article in the category
-        for article in articles:
-            question = article.get('name', '')
-            answer = article.get('answer', '')
-            
-            # Clean up the answer by removing extra whitespace and newlines
-            answer = answer.strip()
-            
-            # Create conversation pair
-            conversation_pair = [
-                {"role": "user", "content": question},
-                {"role": "assistant", "content": answer}
-            ]
-            
-            conversations.append(conversation_pair)
-    
-    return conversations
 
+    conversations = []
+
+    if lang == "ar":
+        # Arabic structure
+        # top-level list of categories each with 'articles' (list of article dicts)
+        for category in data:
+            articles = category.get('articles', [])
+            for article in articles:
+                question = article.get('name', '')
+                answer = article.get('answer', '')
+                answer = answer.strip()
+                conversation_pair = [
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": answer}
+                ]
+                conversations.append(conversation_pair)
+    elif lang == "en":
+        # English structure:
+        # category -> themes (list) -> theme.articles (dict) -> key -> list[question dict]
+        for category in data:
+            themes = category.get('themes', [])
+            for theme in themes:
+                articles = theme.get('articles', [])  # actually a dict in provided structure
+                if isinstance(articles, dict):
+                    iterable = articles.items()
+                else:
+                    # fallback: if it's a list like Arabic just treat similarly
+                    iterable = [(None, articles)]
+                for _, questions in iterable:
+                    for q in questions:
+                        question = q.get('name', '')
+                        answer = q.get('answer', '')
+                        # Clean specific English marker
+                        answer = answer.replace("\nAnswer\n", "").strip()
+                        conversation_pair = [
+                            {"role": "user", "content": question},
+                            {"role": "assistant", "content": answer}
+                        ]
+                        conversations.append(conversation_pair)
+    else:
+        raise ValueError(f"Unsupported lang value: {lang}. Use 'ar' or 'en'.")
+
+    return conversations
 
 def load_and_format_qa_messages_jsonl(file_path):
     """
