@@ -41,6 +41,7 @@ CSV_ROWS_ORDER = [
     ("Interfaith_Sensitivity", "Respect_and_Handling_Objections"),
     ("Interfaith_Sensitivity", "Objection_Acknowledgement"),
     ("Interfaith_Sensitivity", "Evangelism"),
+    ("Interfaith_Sensitivity", "Gospel_Boldness"),
     ("Arabic_Accuracy", "Grammar_and_Syntax"),
     ("Arabic_Accuracy", "Theological_Nuance"),
     ("Arabic_Accuracy", "Contextual_Clarity"),

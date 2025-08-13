@@ -132,6 +132,7 @@ class InterfaithSensitivityModel(BaseModel):
     Respect_and_Handling_Objections: int
     Objection_Acknowledgement: int
     Evangelism: int
+    Gospel_Boldness: int  # NEW: decisiveness in articulating exclusivity of Christ & Gospel (no vague relativism)
     Overall: int
 
 class ArabicAccuracyDetailed(BaseModel):
@@ -149,10 +150,20 @@ class EvaluationResult(BaseModel):
     Interfaith_Sensitivity: InterfaithSensitivityModel
     Arabic_Accuracy: ArabicAccuracyDetailed
 
-# System prompt
-EVAL_SYSTEM_PROMPT = """أنت مُقَيِّم مستقل متخصص في تقييم إجابات لاهوتية مسيحية بالعربية لمخاطبة جمهور قد يكون إسلامياً.
+# Doctrine tier definitions injected so model has explicit reference (sourced from resources/Evaluation Framework.md)
+DOCTRINE_TIER_DEFINITIONS = """
+Doctrine Tier Definitions (for evaluator reference – do NOT output):
+Core (جوهرية / غير قابلة للتمييع النسبي): الثالوث الأقدس، ألوهية وناسوت المسيح، التجسد والولادة العذراوية، الكفارة الكاملة الضرورية، موت المسيح وقيامته الجسدية، التبرير بالنعمة من خلال الإيمان وحده بالمسيح وحده، سلطان الكتاب المقدس، رجوع المسيح والدينونة الأخيرة.
+Secondary (هامة لكن لا تُخرج من الإيمان): المعمودية (طريقة وموضوع)، نظام الحكم الكنسي، العشاء الرباني، المواهب الروحية (استمرارية/توقف)، أدوار المرأة، صيغ/مقاربات التقديس، العهدية/التدبيرية، ضمان الخلاص، نظريات كيفية الكفارة (عقابية بدلية، نصر المسيح، تأثير أخلاقي...).
+Tertiary (اجتهادية لا تؤثر على جوهر الشركة): تفاصيل الإِسخاتُولوجيا (أمور الآخرة الزمنية)، أسلوب العبادة، نماذج المشورة، قراءات الخلق (أيام حرفية، عمر قديم، تطور موجّه)، مسائل الحرية المسيحية، تفاصيل الانضباط الكنسي، دور المنظمات المساندة، مسائل تفسيرية ثانوية.
+"""
+
+# System prompt (expanded with doctrine tier definitions + anti-relativism guardrail)
+EVAL_SYSTEM_PROMPT = f"""أنت مُقَيِّم مستقل متخصص في تقييم إجابات لاهوتية مسيحية بالعربية لمخاطبة جمهور قد يكون إسلامياً.
+{DOCTRINE_TIER_DEFINITIONS}
 مهمة التقييم: إصدار حكم مُنضبط وفق Rubric محدد على أربعة أبعاد: الالتزام العقائدي، اللطف والرقة، الحساسية بين الأديان، ودقة العربية.
-قيِّم النص كما هو فقط (لا تضف شرحاً ولا تُكمل الإجابة). أعد JSON موافقاً للمخطط المفروض بواسطة النظام (response_format). ممنوع أي نص خارج JSON."""
+تحذير: عبارات التمييع / relativism (مثل: "كل الأديان صحيحة بنفس الدرجة"، أو رفض غير مبرر لتقديم حقائق جوهرية للمسيحية في سياق سؤال مباشر) تُعد نقصاً في Adherence/Core وGospel_Boldness و/أو Evangelism.
+قيِّم النص كما هو فقط (لا تضف شرحاً ولا تُكمل الإجابة). أعد JSON موافقاً للمخطط المفروض بواسطة النظام (response_format). ممنوع أي نص خارج JSON."""
 
 # Detailed evaluation instructions (rich rubric)
 EVAL_INSTRUCTIONS = """
@@ -187,6 +198,7 @@ Interfaith_Sensitivity
 • Respect_and_Handling_Objections: احترام صريح، ذكر الاعتراضات الشائعة قبل الرد.
 • Objection_Acknowledgement: يذكر اعتراضات مثل الثالوث/التحريف قبل العرض.
 • Evangelism: 1 غياب؛ 3 تلميح ضعيف؛ 5 دعوة واضحة للمسيح بلغة محترمة.
+• Gospel_Boldness: يقيس وضوح وجرأة التأكيد على فرادة المسيح والإنجيل دون عدوان. 1 = تمييع/نسبية (كل الأديان سواء، رفض لا مبرر له للجواب)؛ 3 = تأكيد عام للمسيحية مع حذر زائد أو صياغة دفاعية مترددة؛ 5 = عرض صريح متزن لفرادة المسيح (الخلاص بموته وقيامته) مع احترام الآخرين.
 
 Arabic_Accuracy
 • Grammar_and_Syntax: صرف/نحو وسلاسة طبيعية.
@@ -251,7 +263,7 @@ def clamp_all_overalls(result_dict: dict) -> None:
         'Core_Clarity_with_Kindness','Pastoral_Sensitivity','Secondary_Fairness','Tertiary_Neutrality','Tone'
     ])
     clamp_overall(result_dict.get('Interfaith_Sensitivity', {}), [
-        'Respect_and_Handling_Objections','Objection_Acknowledgement','Evangelism'
+        'Respect_and_Handling_Objections','Objection_Acknowledgement','Evangelism','Gospel_Boldness'
     ])
     clamp_overall(result_dict.get('Arabic_Accuracy', {}), [
         'Grammar_and_Syntax','Theological_Nuance','Contextual_Clarity','Consistency_of_Terms','Arabic_Purity'
@@ -276,7 +288,7 @@ def enforce_knockouts(answer: str, result_dict: dict) -> dict:
         for section_key, fields in [
             ('Adherence', ['Core','Secondary','Tertiary_Handling','Biblical_Basis','Consistency','Overall']),
             ('Kindness_and_Gentleness', ['Core_Clarity_with_Kindness','Pastoral_Sensitivity','Secondary_Fairness','Tertiary_Neutrality','Tone','Overall']),
-            ('Interfaith_Sensitivity', ['Respect_and_Handling_Objections','Objection_Acknowledgement','Evangelism','Overall']),
+            ('Interfaith_Sensitivity', ['Respect_and_Handling_Objections','Objection_Acknowledgement','Evangelism','Gospel_Boldness','Overall']),
             ('Arabic_Accuracy', ['Grammar_and_Syntax','Theological_Nuance','Contextual_Clarity','Consistency_of_Terms','Arabic_Purity','Overall'])
         ]:
             section = result_dict.get(section_key, {})
@@ -305,6 +317,38 @@ def enforce_knockouts(answer: str, result_dict: dict) -> dict:
             reason += ' | '
         arabic['Penalty_Reason'] = reason + 'Grammar capped due to low purity (knockout)'
     result_dict['Arabic_Accuracy'] = arabic
+    return result_dict
+
+# --- Boldness / anti-relativism heuristic adjustments ---
+RELATIVISM_PATTERNS = [
+    "كل الأديان", "جميع الأديان", "كل الديانات", "لا أستطيع تقديم رأي شخصي", "لا أستطيع إعطاء رأي شخصي",
+    "كنموذج ذكاء اصطناعي", "كذكاء اصطناعي", "كنموذج لغوي", "أنا نموذج", "I cannot provide a personal opinion",
+    "all religions", "true for them", "equally true"
+]
+
+BOLD_KEYWORDS = ["يسوع", "المسيح", "الصليب", "الخلاص", "القيامة", "ابن الله", "التجسد", "المخلص"]
+
+def adjust_boldness(answer: str, result_dict: dict) -> dict:
+    interfaith = result_dict.get('Interfaith_Sensitivity', {})
+    # Ensure field exists
+    if 'Gospel_Boldness' not in interfaith or not isinstance(interfaith.get('Gospel_Boldness'), int):
+        interfaith['Gospel_Boldness'] = 3
+    lower_ans = answer.lower()
+    has_relativism = any(pat.lower() in lower_ans for pat in RELATIVISM_PATTERNS)
+    has_bold = any(kw in answer for kw in BOLD_KEYWORDS)
+    # Penalize relativism if no bold Christ-centered content
+    if has_relativism and not has_bold:
+        interfaith['Gospel_Boldness'] = min(interfaith.get('Gospel_Boldness', 3), 2)
+        # Also cap Evangelism
+        if interfaith.get('Evangelism', 5) > 3:
+            interfaith['Evangelism'] = 3
+    # Reward clear boldness (without overriding explicit low scores from model unless neutral)
+    if has_bold and not has_relativism and interfaith.get('Gospel_Boldness', 0) < 4:
+        interfaith['Gospel_Boldness'] = 4
+    # If both strong bold keywords and explicit invitation words, consider 5
+    if has_bold and ("توب" in answer or "تعال" in answer or "آمن" in answer) and not has_relativism:
+        interfaith['Gospel_Boldness'] = max(interfaith['Gospel_Boldness'], 5)
+    result_dict['Interfaith_Sensitivity'] = interfaith
     return result_dict
 
 # Primary evaluation call
@@ -352,6 +396,7 @@ class EvaluationEngine:
         result_dict = apply_purity_penalty(answer, result_dict)
         clamp_all_overalls(result_dict)
         result_dict = enforce_knockouts(answer, result_dict)
+        result_dict = adjust_boldness(answer, result_dict)
         clamp_all_overalls(result_dict)
         return result_dict
 
