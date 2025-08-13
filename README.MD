@@ -4,12 +4,12 @@
 
 # Multilingual Reformed Christian Q&A Dataset & Evaluation Toolkit
 
-* **Purpose**: Curate and refine doctrinally faithful, culturally contextual Q&A datasets. 
+* **Purpose**: Curate and refine doctrinally faithful Q&A datasets. 
 * **Audience**: Ministries, researchers, model fine‑tuners. 
 * **Differentiators**: Reformed theological guardrails, multi‑criteria rubric (adherence, pastoral tone, interfaith sensitivity, linguistic accuracy), multilingual roadmap.
 * **Outputs**: Training JSONL, generation/eval scripts, aggregated score matrix, raw judge logs.
 
-Building high‑quality, reformed, multilingual conversational datasets for Calvinist Parrot Ministries.
+Building high‑quality, reformed, multilingual Q&A datasets for Calvinist Parrot Ministries.
 
 ---
 
@@ -214,7 +214,7 @@ Mid Term (Spanish):
 * Implement optional cross-language doctrinal consistency diff (start with Arabic ↔ English, then include Spanish).
 
 Long Term / Community Help Wanted:
-* Additional languages (e.g., Chinese, Hindi, French, Bengali, Portuguese, Russian, Urdu) — contributors provide: (1) legally usable Q&A sources, (2) 100-question eval set, (3) initial rubric translation notes.
+* Additional languages (e.g., Chinese, Hindi, French, Bengali, Portuguese, Russian, Japanese) — contributors provide: (1) legally usable Q&A sources, (2) 100-question eval set, (3) initial rubric translation notes.
 * Automated doctrinal drift detection across languages.
 * Optional citation grounding (Scripture + source attribution) layer.
 

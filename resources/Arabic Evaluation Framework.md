@@ -1,4 +1,4 @@
-# **Evaluation Framework**
+# **Arabic Evaluation Framework**
 
 ## Doctrine Tier Definitions (Core / Secondary / Tertiary)
 
@@ -137,8 +137,8 @@ Measure the model’s ability to interact respectfully with Muslim audiences and
    "Kindness & Gentleness": 4,
    "Interfaith Sensitivity": {
       "Respect and Handling Objections": 4,
-   "Evangelism": 5,
-   "Gospel_Boldness": 5
+      "Evangelism": 5,
+      "Gospel_Boldness": 5
    },
    "Arabic Accuracy": {
       "Grammar & Syntax": 5,
