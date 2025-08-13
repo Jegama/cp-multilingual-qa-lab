@@ -11,13 +11,13 @@ is a list like: [ {role: system, content: ...}, {role: user, content: ...}, {rol
 
 Usage examples (Windows CMD):
   1) Evaluate existing dataset produced by model "google:gemma-3-7b" (judge defaults to gpt-5-mini):
-      python evaluate.py --mode dataset --dataset data/training_dataset_small_model.jsonl --answers-label google:gemma-3-7b
+      python evaluate.py --mode dataset --dataset data/arabic/ar_training_dataset_small_model.jsonl --answers-label google:gemma-3-7b
 
   2) Evaluate existing dataset overriding judge model:
-      python evaluate.py --mode dataset --dataset data/training_dataset_small_model.jsonl --answers-label google:gemma-3-7b --judge-model gpt-5-omni
+      python evaluate.py --mode dataset --dataset data/arabic/ar_training_dataset_small_model.jsonl --answers-label google:gemma-3-7b --judge-model gpt-5-omni
 
   3) Generate answers (OpenAI) using provider model then label them simply "gemma7" and judge with default gpt-5-mini:
-      python evaluate.py --mode generate-openai --questions-file data/eval_questions.txt --gen-model google:gemma-3-7b --answers-label gemma7
+      python evaluate.py --mode generate-openai --questions-file data/arabic/ar_eval_questions.txt --gen-model google:gemma-3-7b --answers-label gemma7
 
   4) Generate with Together provider model but label column "llama8":
       python evaluate.py --mode generate-together --gen-model meta-llama/Meta-Llama-3-8B-Instruct --answers-label llama8
@@ -184,7 +184,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--mode", choices=["dataset", "generate-openai", "generate-together"], default="dataset",
                    help="dataset: evaluate existing dataset (strict 100-question eval set); generate-* : generate answers then evaluate")
     p.add_argument("--dataset", required=True, help="Existing dataset path OR output dataset for generation")
-    p.add_argument("--questions-file", default="data/eval_questions.txt", help="Questions file (generation modes & eval filter)")
+    p.add_argument("--questions-file", default="data/arabic/ar_eval_questions.txt", help="Questions file (generation modes & eval filter)")
     p.add_argument("--gen-model", help="Provider model used to generate answers (generation modes)")
     p.add_argument("--answers-label", help="Human-friendly label for the answers column (defaults: gen-model or inferred from dataset)")
     p.add_argument("--judge-model", default="gpt-5-mini", help="Model used as evaluator (default: gpt-5-mini)")

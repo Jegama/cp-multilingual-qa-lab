@@ -5,7 +5,7 @@ function-based workflow so notebooks can simply do:
 
     from parrot_ai.evaluation import EvaluationEngine, default_engine
     engine = EvaluationEngine(model="gpt-5-mini")  # or use default_engine
-    pairs = engine.load_qa_pairs("data/training_dataset_small_model.jsonl")
+    pairs = engine.load_qa_pairs("data/arabic/ar_training_dataset_small_model.jsonl")
     results = engine.batch_evaluate(pairs, limit=10)
 
 Backward compatibility: the previous top-level functions ``load_qa_pairs``,
@@ -24,7 +24,7 @@ load_dotenv()
 # --- Data loading utility (kept standalone for reuse) ---
 def load_qa_pairs(
     jsonl_path: str,
-    question_list_path: Optional[str] = "data/eval_questions.txt",
+    question_list_path: Optional[str] = "data/arabic/ar_eval_questions.txt",
     limit: int = 100,
 ) -> List[Tuple[str, str]]:
     """Load (question, answer) pairs filtered to a curated eval question list.
@@ -77,7 +77,7 @@ def load_qa_pairs(
         pairs = pairs[:limit]
     return pairs
 
-def load_eval_questions(question_file: str = "data/eval_questions.txt", limit: int = 100) -> List[str]:
+def load_eval_questions(question_file: str = "data/arabic/ar_eval_questions.txt", limit: int = 100) -> List[str]:
     """Load up to ``limit`` evaluation questions from text file (one per line)."""
     try:
         with open(question_file, 'r', encoding='utf-8') as f:
@@ -486,7 +486,7 @@ class EvaluationEngine:
 
     def generate_responses_openai_from_file(
         self,
-        question_file: str = "data/eval_questions.txt",
+        question_file: str = "data/arabic/ar_eval_questions.txt",
         limit: int = 100,
         **kwargs,
     ) -> List[Dict[str, Any]]:
@@ -555,7 +555,7 @@ class EvaluationEngine:
 
     def generate_responses_together_from_file(
         self,
-        question_file: str = "data/eval_questions.txt",
+        question_file: str = "data/arabic/ar_eval_questions.txt",
         limit: int = 100,
         **kwargs,
     ) -> List[Dict[str, Any]]:

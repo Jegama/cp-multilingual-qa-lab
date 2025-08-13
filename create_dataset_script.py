@@ -99,7 +99,7 @@ def load_and_format_gotquestions(file_path):
 
 def load_and_format_qa_messages_jsonl(file_path):
     """
-    Load the Arabic Final qa_messages.jsonl file and format it into conversation pairs.
+    Load the ar_qa_catechism.jsonl file and format it into conversation pairs.
 
     Args:
         file_path (str): Path to the JSONL file
@@ -310,9 +310,9 @@ def main():
     parser.add_argument("--model", default="google/gemma-3-12b-it", help="Model name to load")
     parser.add_argument("--use-api", action="store_true", help="Use HuggingFace API instead of local model")
     parser.add_argument("--api-provider", default="nebius", help="API provider for HuggingFace (default: nebius)")
-    parser.add_argument("--output", default="data/training_dataset.jsonl", help="Output file path")
-    parser.add_argument("--gotquestions", default="data/gotquestions_ar.json", help="GotQuestions JSON file path")
-    parser.add_argument("--qa-messages", default="data/Arabic Final qa_messages.jsonl", help="QA Messages JSONL file path")
+    parser.add_argument("--output", default="data/temp_training_dataset.jsonl", help="Output file path")
+    parser.add_argument("--gotquestions", default="data/arabic/ar_gotquestions.json", help="GotQuestions JSON file path")
+    parser.add_argument("--qa-messages", default="data/arabic/ar_qa_catechism.jsonl", help="QA Messages JSONL file path")
     parser.add_argument("--batch-size", type=int, default=10, help="Batch save interval")
     parser.add_argument("--max-retries", type=int, default=3, help="Maximum API retry attempts for server errors")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
