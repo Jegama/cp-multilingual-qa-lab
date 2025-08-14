@@ -351,7 +351,8 @@ def main():
             logger.error("Get your token from: https://huggingface.co/settings/tokens")
             sys.exit(1)
     
-    try:        # Load combined data
+    try:
+        # Load combined data
         combined_data = load_combined_data(args.gotquestions, args.qa_messages, logger)
         
         # Initialize ParrotAI or ParrotAIHF based on arguments

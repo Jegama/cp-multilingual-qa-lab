@@ -11,4 +11,5 @@ testing_*
 *.xlsx
 venv/
 *.log
-temp_training_dataset.jsonl
+temp_*.jsonl
+notes.md

@@ -5,9 +5,9 @@ This module contains workflow functions that combine multiple AI generations
 with review processes to improve answer quality and theological accuracy.
 """
 
-from parrot_ai.core import ParrotAI, ParrotAIHF
-import parrot_ai.prompts as parrot_prompts
 from typing import Union
+import parrot_ai.prompts as parrot_prompts
+from .core import ParrotAI, ParrotAIHF  # lightweight (ParrotAI heavy deps are lazy)
 
 
 def parrot_chain(data, parrot_instance: Union[ParrotAI, ParrotAIHF]):

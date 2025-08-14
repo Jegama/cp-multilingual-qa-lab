@@ -1,12 +1,14 @@
+"""ParrotAI package public API.
+
+We keep imports light so that users performing only evaluation / HF API usage
+don't need heavy local model deps (torch, transformers, bitsandbytes) installed.
+
+``ParrotAI`` (local) still available via standard import; its heavy deps are
+now lazily imported inside ``ParrotAI.load_model`` (see ``core.py``).
 """
-ParrotAI: A package for theological AI reasoning and response generation.
 
-This package provides tools for loading language models, generating responses
-with theological prompts, and executing multi-step reasoning chains.
-"""
+from .core import ParrotAI, ParrotAIHF  # noqa: F401
+from .chains import parrot_chain  # noqa: F401
 
-from .core import ParrotAI, ParrotAIHF
-from .chains import parrot_chain
-
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = ["ParrotAI", "ParrotAIHF", "parrot_chain"]

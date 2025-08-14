@@ -1,51 +1,84 @@
-import torch
+"""Core runtime classes for ParrotAI.
+
+Design goal: Avoid importing heavy local model dependencies (torch, transformers,
+bitsandbytes) unless the user explicitly chooses to load a local model via
+``ParrotAI.load_model``. This lets light‑weight usages (e.g. evaluation with
+OpenAI / Together / HF API) work in environments where ``torch`` is not
+installed.
+
+ParrotAI (local model):
+  - Heavy deps are imported lazily inside ``load_model``.
+  - If a user calls any generation API before ``load_model`` an error is raised.
+
+ParrotAIHF (HF Inference API):
+  - Only depends on ``huggingface_hub`` (lightweight) and can be used without
+    ``torch`` installed.
+"""
+
 import os
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer
-)
-from transformers.utils.quantization_config import BitsAndBytesConfig
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
 from parrot_ai.prompts import MAIN_SYSTEM_PROMPT
+from typing import Any, cast
+
 
 class ParrotAI:
-    """A class for loading and using 4-bit quantized causal language models."""
-    
+    """Local model wrapper with (optional) 4-bit quantization support.
+
+    The class defers importing heavy libraries until ``load_model`` is called to
+    keep ``import parrot_ai`` light for users who only need API-backed flows.
+    """
     def __init__(self):
-        """Initialize ParrotAI instance."""
         self.model = None
         self.tokenizer = None
         self.model_name = None
-    
+        self._torch = None  # will be set after lazy import in load_model
+
     def load_model(self, model_name: str):
-        """Load a 4-bit quantised causal-LM with automatic GPU sharding."""
-        # Clear GPU memory
-        torch.cuda.empty_cache()
-        
+        """Load a causal LM with 4-bit quantization (requires torch + transformers).
+
+        Imports torch/transformers/bitsandbytes lazily so the package can be
+        imported without those heavy dependencies present.
+        """
+        try:  # Lazy heavy imports
+            import torch  # type: ignore
+            from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+            from transformers.utils.quantization_config import BitsAndBytesConfig  # type: ignore
+        except ImportError as e:  # pragma: no cover - environment dependent
+            raise ImportError(
+                "Local model loading requires 'torch' and 'transformers'. Install them, e.g.\n"
+                "  pip install torch transformers accelerate bitsandbytes\n"
+                "(choose the correct torch build for your platform/GPU)."
+            ) from e
+
+        self._torch = torch
+
+        # Clear GPU cache if available (safe no-op on CPU‑only builds)
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+            except Exception:  # noqa: BLE001
+                pass
+
         bnb_cfg = BitsAndBytesConfig(
-            load_in_4bit=True,          # activate 4-bit weights
-            bnb_4bit_quant_type="nf4",  # normal-float-4, best accuracy
-            bnb_4bit_compute_dtype=torch.bfloat16,  # use bfloat16 for better numerical stability
-            bnb_4bit_use_double_quant=True  # nested quantization for additional memory savings
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
         )
-        
+
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             quantization_config=bnb_cfg,
-            device_map="auto",           # spreads layers CPU↔GPU if needed
-            torch_dtype="auto"           # use model's native dtype for non-quantized modules
+            device_map="auto",
+            torch_dtype="auto",
         )
-        
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        
-        # Set pad_token if not already set (important for batch generation)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        
         self.model_name = model_name
         print(f"Model {model_name} loaded successfully!")
-    
+
     def generate(
         self,
         prompt: str,
@@ -54,13 +87,13 @@ class ParrotAI:
         temperature: float = 0.1,
         top_p: float = 0.9,
     ):
+        """One-shot text generation, chat-template aware.
+
+        Returns only the assistant reply text.
         """
-        One-shot text generation, chat-template aware.
-        Returns the assistant reply only.
-        """
-        if self.model is None or self.tokenizer is None:
-            raise ValueError("Model not loaded. Please call load_model() first.")
-        
+        if self.model is None or self.tokenizer is None or self._torch is None:
+            raise ValueError("Model not loaded. Call load_model() first (requires torch).")
+
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -69,75 +102,57 @@ class ParrotAI:
         chat = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
-            add_generation_prompt=True
+            add_generation_prompt=True,
         )
         inputs = self.tokenizer([chat], return_tensors="pt").to(self.model.device)
 
-        with torch.no_grad():  # Ensure no gradients for inference
+        torch = self._torch  # local alias
+        with torch.no_grad():  # type: ignore[attr-defined]
             gen_ids = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 top_p=top_p,
                 do_sample=True,
-                pad_token_id=self.tokenizer.eos_token_id
+                pad_token_id=self.tokenizer.eos_token_id,
             )
 
-        # strip the prompt tokens so you only get the new text
         reply_ids = gen_ids[0, inputs.input_ids.shape[1]:]
         return self.tokenizer.decode(reply_ids, skip_special_tokens=True)
-    
+
     def is_loaded(self) -> bool:
-        """Check if a model is currently loaded."""
         return self.model is not None and self.tokenizer is not None
-    
+
     def get_model_info(self) -> str:
-        """Get comprehensive information about the currently loaded model."""
         if not self.is_loaded():
             return "No model loaded"
-        
-        assert self.model is not None # Ensure model is not None for type checker
+        assert self.model is not None
         info_lines = [
             f"Model Name: {self.model_name}",
-            f"Memory Footprint: {self.model.get_memory_footprint() / 1e9:.2f} GB",
-            f"Total Parameters: {self.model.num_parameters():,}",
-            f"Trainable Parameters: {self.model.num_parameters(only_trainable=True):,}",
         ]
-        
-        # Add model configuration information
-        config = self.model.config
-        if hasattr(config, 'model_type'):
-            info_lines.append(f"Model Type: {config.model_type}")
-        if hasattr(config, 'hidden_size'):
-            info_lines.append(f"Hidden Size: {config.hidden_size}")
-        if hasattr(config, 'num_hidden_layers'):
-            info_lines.append(f"Number of Layers: {config.num_hidden_layers}")
-        if hasattr(config, 'num_attention_heads'):
-            info_lines.append(f"Attention Heads: {config.num_attention_heads}")
-        if hasattr(config, 'vocab_size'):
-            info_lines.append(f"Vocabulary Size: {config.vocab_size:,}")
-        if hasattr(config, 'max_position_embeddings'):
-            info_lines.append(f"Max Position Embeddings: {config.max_position_embeddings:,}")
-        
-        # Add device and dtype information
+        try:
+            info_lines.append(f"Memory Footprint: {self.model.get_memory_footprint() / 1e9:.2f} GB")
+            info_lines.append(f"Total Parameters: {self.model.num_parameters():,}")
+            info_lines.append(f"Trainable Parameters: {self.model.num_parameters(only_trainable=True):,}")
+        except Exception:  # noqa: BLE001
+            pass
+        cfg = getattr(self.model, 'config', None)
+        for attr in [
+            'model_type','hidden_size','num_hidden_layers','num_attention_heads',
+            'vocab_size','max_position_embeddings'
+        ]:
+            if cfg is not None and hasattr(cfg, attr):
+                info_lines.append(f"{attr.replace('_',' ').title()}: {getattr(cfg, attr)}")
         try:
             device = next(self.model.parameters()).device
             dtype = next(self.model.parameters()).dtype
-            info_lines.extend([
-                f"Device: {device}",
-                f"Data Type: {dtype}",
-            ])
-        except StopIteration:
+            info_lines.extend([f"Device: {device}", f"Data Type: {dtype}"])
+        except Exception:  # noqa: BLE001
             pass
-        
-        # Add quantization information
-        if hasattr(self.model, 'is_quantized') and self.model.is_quantized:
+        if getattr(self.model, 'is_quantized', False):
             info_lines.append("Quantization: 4-bit (BitsAndBytes)")
-        
-        # Add generation capability
-        if hasattr(self.model, 'can_generate') and self.model.can_generate():
+        if getattr(self.model, 'can_generate', lambda: False)():
             info_lines.append("Generation: Supported")
-        
         return "\n".join(info_lines)
 
 class ParrotAIHF:
@@ -155,6 +170,7 @@ class ParrotAIHF:
         
         self.client = InferenceClient(
             api_key=hf_token,
+            provider=cast(Any, provider)
         )
         self.provider = provider
         self.model_name = None

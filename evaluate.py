@@ -220,6 +220,16 @@ def infer_answers_label_from_dataset(path: Path) -> str | None:
 def main(argv: List[str]) -> int:
     args = parse_args(argv)
 
+    # Ensure evaluation results directory exists early so any downstream logic
+    # (including user-specified results filenames) can safely rely on it.
+    results_dir = Path("data") / "eval_results"
+    try:
+        results_dir.mkdir(parents=True, exist_ok=True)
+        # Optional: uncomment for debugging
+        # print(f"[init] Ensured eval results directory: {results_dir}")
+    except Exception as e:
+        print(f"[warn] Could not create eval results dir {results_dir}: {e}")
+
     system_prompt = None
     if args.system_prompt_file:
         try:
@@ -305,10 +315,15 @@ def main(argv: List[str]) -> int:
     # Update CSV with answers label column
     update_comparison_csv(Path(args.comparison_csv), answers_label, aggregated, overwrite=args.overwrite)
 
-    # Append raw results JSONL
-    results_jsonl = Path(args.results_jsonl) if args.results_jsonl else Path(
-        f"eval_results_{sanitize_filename(answers_label)}__judged_by_{sanitize_filename(args.judge_model)}.jsonl"
-    )
+    # Append raw results JSONL (directory already ensured at start of main)
+
+    if args.results_jsonl:
+        # If user supplies a relative path or just a filename, place it inside results_dir
+        supplied = Path(args.results_jsonl)
+        results_jsonl = supplied if supplied.is_absolute() else results_dir / supplied.name
+    else:
+        filename = f"eval_results_{sanitize_filename(answers_label)}__judged_by_{sanitize_filename(args.judge_model)}.jsonl"
+        results_jsonl = results_dir / filename
     meta = {
         'dataset': str(dataset_path),
         'answers_label': answers_label,
