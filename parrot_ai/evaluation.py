@@ -482,7 +482,6 @@ class EvaluationEngine:
         self,
         questions: List[str],
         model: Optional[str] = None,
-        system_prompt: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Generate answers for a list of questions via OpenAI Responses API.
 
@@ -491,35 +490,25 @@ class EvaluationEngine:
         use_model = model or self.model
         out: List[Dict[str, Any]] = []
         for i, q in enumerate(questions):
-            if system_prompt:
-                resp = self.client.chat.completions.create(
-                    model=use_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": q},
-                    ],
-                )
-                answer = resp.choices[0].message.content if resp.choices else ""
-            else:
-                resp = self.client.responses.create(
-                    model=use_model,
-                    input=q,
-                )
-                answer = getattr(resp, 'output_text', None)
-                if answer is None:
-                    try:
-                        parts = []
-                        for item in getattr(resp, 'output', []) or []:
-                            text = getattr(item, 'content', None)
-                            if isinstance(text, list):
-                                for seg in text:
-                                    if isinstance(seg, dict) and seg.get('type') == 'output_text':
-                                        parts.append(seg.get('text', ''))
-                            elif isinstance(text, str):
-                                parts.append(text)
-                        answer = "".join(parts)
-                    except Exception:  # noqa: BLE001
-                        answer = ""
+            resp = self.client.responses.create(
+                model=use_model,
+                input=q,
+            )
+            answer = getattr(resp, 'output_text', None)
+            if answer is None:
+                try:
+                    parts = []
+                    for item in getattr(resp, 'output', []) or []:
+                        text = getattr(item, 'content', None)
+                        if isinstance(text, list):
+                            for seg in text:
+                                if isinstance(seg, dict) and seg.get('type') == 'output_text':
+                                    parts.append(seg.get('text', ''))
+                        elif isinstance(text, str):
+                            parts.append(text)
+                    answer = "".join(parts)
+                except Exception:  # noqa: BLE001
+                    answer = ""
             out.append({
                 'index': i,
                 'question': q,
@@ -544,7 +533,6 @@ class EvaluationEngine:
         self,
         questions: List[str],
         model: str = "openai/gpt-oss-120b",
-        system_prompt: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Generate answers using Together.ai chat completions API.
 
@@ -560,8 +548,6 @@ class EvaluationEngine:
         out: List[Dict[str, Any]] = []
         for i, q in enumerate(questions):
             messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": q})
             resp = client.chat.completions.create(
                 model=model,

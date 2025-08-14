@@ -18,8 +18,46 @@ Building high‑quality, reformed, multilingual Q&A datasets for Calvinist Parro
 |------|---------|
 | Data Sources | Curated Arabic (and future English) Christian Q&A from GotQuestions + catechism material. |
 | Dataset Builder | `create_dataset_script.py` merges sources and rewrites answers via a controllable ParrotAI chain. |
-| Evaluation | `evaluate.py` generates or scores model answers on a fixed 100‑question evaluation set with rubric aggregation. |
+| Evaluation | `cp_eval.py` generates or scores model answers on a fixed 100‑question evaluation set with rubric aggregation. |
 | Outputs | Training JSONL (messages format), evaluation comparison CSV, per‑run JSONL judge results. |
+
+---
+
+# Current Evals
+
+## Dataset Evaluations
+Current aggregated rubric means from `data/arabic/training_datasets/evals/dataset_eval_comparison.csv`:
+
+| Criterion | Sub-criterion | google-gemma-3-7b | gpt-oss-120b-v1 | gpt-oss-120b-v2 | google-gemma-3-27b |
+|-----------|---------------|------------------:|----------------:|----------------:|------------------:|
+| Adherence | N/A | 4.58 | **4.83** | 4.76 | **4.83** |
+| Kindness and Gentleness | N/A | 4.73 | 4.87 | **4.92** | 4.86 |
+| Interfaith Sensitivity | Respect and Handling Objections | 3.23 | 3.25 | **3.79** | 3.38 |
+| Interfaith Sensitivity | Objection Acknowledgement | 2.08 | 2.13 | **2.42** | 2.17 |
+| Interfaith Sensitivity | Evangelism | 3.14 | 3.25 | **4.09** | 3.25 |
+| Interfaith Sensitivity | Gospel Boldness | 4.10 | 4.19 | **4.80** | 4.15 |
+| Arabic Accuracy | Grammar and Syntax | 4.31 | 4.48 | 4.55 | **4.78** |
+| Arabic Accuracy | Theological Nuance | 4.22 | 4.58 | 4.50 | **4.67** |
+| Arabic Accuracy | Contextual Clarity | 4.69 | 4.67 | 4.58 | **4.92** |
+| Arabic Accuracy | Consistency of Terms | 4.74 | 4.86 | 4.78 | **4.95** |
+| Arabic Accuracy | Arabic Purity | 4.23 | 4.50 | 4.72 | **4.83** |
+
+## Fine-tuned Model Evaluations
+Current aggregated rubric means from `data/arabic/ft_evals/ft_evals_comparison.csv`:
+
+| Criterion | Sub-criterion | gtp-4-1-nano-ft |
+|-----------|---------------|----------------:|
+| Adherence | N/A | **3.59** |
+| Kindness and Gentleness | N/A | **4.25** |
+| Interfaith Sensitivity | Respect and Handling Objections | **2.96** |
+| Interfaith Sensitivity | Objection Acknowledgement | **1.92** |
+| Interfaith Sensitivity | Evangelism | **1.94** |
+| Interfaith Sensitivity | Gospel Boldness | **3.08** |
+| Arabic Accuracy | Grammar and Syntax | **3.53** |
+| Arabic Accuracy | Theological Nuance | **3.10** |
+| Arabic Accuracy | Contextual Clarity | **3.73** |
+| Arabic Accuracy | Consistency of Terms | **3.87** |
+| Arabic Accuracy | Arabic Purity | **3.80** |
 
 ---
 
@@ -27,15 +65,23 @@ Building high‑quality, reformed, multilingual Q&A datasets for Calvinist Parro
 ```
 data/
 	arabic/
-		ar_gotquestions.json          # Raw Arabic structured Q&A (categories + articles)
-		ar_qa_catechism.jsonl         # Additional QA pairs (messages schema)
-		ar_eval_questions.txt         # EXACTLY 100 evaluation questions (order is canonical)
-		ar_training_dataset_*.jsonl   # Previously generated training datasets
-	english/ (future expansion)
-parrot_ai/                        # Core chain + evaluation engine components
-create_dataset_script.py          # Build / enrich training dataset
-evaluate.py                       # Unified generation + evaluation CLI
-evaluation_comparison.csv         # (Created after first evaluation) aggregated rubric scores
+		ar_gotquestions.json            # Raw Arabic structured Q&A (categories + articles)
+		ar_qa_catechism.jsonl           # Additional QA pairs (messages schema)
+		ar_eval_questions.txt           # EXACTLY 100 evaluation questions (order is canonical)
+		training_datasets/              # Source & refined training sets
+			ar_training_dataset_*.jsonl   # Generated training datasets (messages schema)
+			evals/                        # Evaluation artifacts for --mode dataset
+				dataset_eval_comparison.csv # Aggregated rubric means (dataset mode)
+				eval_results_*.jsonl        # Raw judge outputs for dataset evaluations
+		ft_evals/                       # Generation + evaluation artifacts (generate-* modes)
+			generated_openai_*.jsonl      # Auto-created datasets from OpenAI-style generation
+			generated_together_*.jsonl    # Auto-created datasets from Together generation
+			ft_evals_comparison.csv       # Aggregated rubric means (generate modes)
+			eval_results_*.jsonl          # Raw judge outputs for generate-* evaluations
+	english/                          # (Future expansion: mirrors arabic/ layout)
+parrot_ai/                          # Core chain + evaluation engine components
+create_dataset_script.py            # Build / enrich training dataset
+cp_eval.py                          # Unified generation + evaluation CLI (language + mode aware)
 ```
 
 ---
@@ -49,7 +95,7 @@ Each line: a JSON object with at least:
 		{"role": "user", "content": "<question>"},
 		{"role": "assistant", "content": "<answer>"}
 	],
-	"gen_model": "google:gemma-3-7b",          // (present when produced via evaluate.py --mode generate-*)
+	"gen_model": "google:gemma-3-7b",          // (present when produced via cp_eval.py --mode generate-*)
 	"provider": "openai|together|...",          // optional
 	"timestamp": "2025-08-13T12:34:56.000000"   // ISO8601
 }
@@ -120,12 +166,15 @@ more data\arabic\ar_training_dataset_gemma.jsonl
 
 ---
 
-## 2. Evaluation & Answer Generation (`evaluate.py`)
-Capabilities:
-1. Evaluate an existing dataset (must cover all 100 questions in `ar_eval_questions.txt`).
-2. Generate fresh answers using a provider model (OpenAI‑style or Together API) then evaluate.
-3. Aggregate rubric scores into / append a column in `evaluation_comparison.csv`.
-4. Append raw per‑question judge outputs into a results JSONL file.
+## 2. Evaluation & Answer Generation (`cp_eval.py`)
+### Capabilities
+1. Evaluate an existing training dataset (`--mode dataset`).
+2. Generate answers using a provider model (OpenAI‑style or Together) and evaluate in one pass (`--mode generate-openai|generate-together`).
+3. Auto‑organize artifacts by language & mode:
+	 * `data/<language>/training_datasets/evals/` for dataset mode
+	 * `data/<language>/ft_evals/` for generation modes
+4. Append / update aggregated rubric score matrices (separate CSV per mode group).
+5. Append raw per‑question judge outputs (JSONL, append‑only).
 
 ### Rubric Structure
 Sections & sub‑criteria (Arabic + ministry context):
@@ -134,50 +183,72 @@ Sections & sub‑criteria (Arabic + ministry context):
 - Interfaith_Sensitivity: Respect_and_Handling_Objections, Objection_Acknowledgement, Evangelism, Gospel_Boldness
 - Arabic_Accuracy: Grammar_and_Syntax, Theological_Nuance, Contextual_Clarity, Consistency_of_Terms, Arabic_Purity
 
-### Required: 100 Evaluation Questions
-`data/arabic/ar_eval_questions.txt` MUST contain exactly 100 lines. Script enforces this.
+### Canonical 100 Evaluation Questions
+Each language has a canonical 100‑question file: e.g. Arabic `data/arabic/ar_eval_questions.txt` (must be exactly 100 lines). The script enforces count. Omit `--questions-file` to auto‑infer `data/<language>/<prefix>eval_questions.txt` (`ar_` or `en_`).
 
-### Common Workflows
-1) Evaluate a prebuilt dataset:
+### Key Arguments (simplified)
+| Flag | Modes | Notes |
+|------|-------|-------|
+| `--language {arabic,english}` | all | Selects data namespace (default arabic). |
+| `--mode {dataset,generate-openai,generate-together}` | all | Determines workflow + storage paths. |
+| `--dataset` | dataset | Path to existing training dataset JSONL (auto-resolved inside `training_datasets/` if relative). |
+| `--gen-model` | generate-* | Required for generation; provider model identifier. |
+| `--output-dataset` | generate-* | Output filename (placed in `ft_evals/` if relative). Auto name if omitted. |
+| `--questions-file` | all | Optional; auto inferred if omitted. Used for filtering (dataset mode) and prompt list (generation). |
+| `--answers-label` | all | Column name in comparison CSV (inferred from dataset `gen_model` or defaults to `gen-model` for generation). |
+| `--judge-model` | all | Evaluation (judge) model (default gpt-5-mini). |
+| `--comparison-csv` | all | Override CSV filename; placed in mode-appropriate directory. |
+| `--results-jsonl` | all | Override raw results filename; placed in mode-appropriate directory. |
+| `--overwrite` | all | Replace existing column of same answers label in comparison CSV. |
+
+### Automatic Path Resolution
+| Mode | Comparison CSV (default) | Results JSONL Dir | Generated Dataset Dir |
+|------|--------------------------|-------------------|-----------------------|
+| dataset | `training_datasets/evals/dataset_eval_comparison.csv` | `training_datasets/evals/` | (N/A) |
+| generate-* | `ft_evals/ft_evals_comparison.csv` | `ft_evals/` | `ft_evals/` |
+
+Relative override filenames are rooted into these directories; absolute paths are respected.
+
+### Typical Workflows (Arabic examples)
+Evaluate an existing training dataset (auto‑inferred questions file):
 ```cmd
-python evaluate.py --mode dataset ^
-	--dataset data/arabic/ar_training_dataset_gemma.jsonl ^
+python cp_eval.py --language arabic --mode dataset ^
+	--dataset data/arabic/training_datasets/ar_training_dataset_gemma.jsonl ^
 	--answers-label gemma-12b ^
 	--judge-model gpt-5-mini
 ```
 
-1) Generate answers via OpenAI backend, then evaluate:
+Generate via OpenAI provider then evaluate (questions file auto inferred):
 ```cmd
-python evaluate.py --mode generate-openai ^
-	--questions-file data/arabic/ar_eval_questions.txt ^
+python cp_eval.py --language arabic --mode generate-openai ^
 	--gen-model gpt-5-mini ^
 	--answers-label gpt-5-mini
 ```
 
-1) Generate answers via Together API backend, then evaluate:
+Generate via Together provider without specifying answers label (will default to `--gen-model`):
 ```cmd
-python evaluate.py --mode generate-together ^
-	--questions-file data/arabic/ar_eval_questions.txt ^
-	--gen-model openai/gpt-oss-120b ^
-	--answers-label gpt-oss-120b
+python cp_eval.py --language arabic --mode generate-together ^
+	--gen-model meta-llama/Llama-4-Scout-17B-16E-Instruct ^
+	--answers-label llama-4-scout-17b-16e-instruct
 ```
 
-### Column Overwrite vs. New Suffix
-If `answers-label` already exists in `evaluation_comparison.csv`:
-* Use `--overwrite` to replace the existing column.
-* Omit it to auto‑append with a numeric suffix (e.g., `gemma7_2`).
+### Column Overwrite vs. Suffix
+If the answers label already exists in the comparison CSV:
+* Use `--overwrite` to replace values.
+* Omit it to auto‑append with numeric suffix (e.g., `gemma-3-7b_2`).
 
-### Outputs Produced
-| File | Description |
-|------|-------------|
-| `generated_openai_<model>.jsonl` | Auto-named dataset when using generate modes (unless `--output-dataset`). |
-| `evaluation_comparison.csv` | Aggregated mean scores per criterion (one column per answers label). |
-| `eval_results_<answers>__judged_by_<judge>.jsonl` | Raw line-by-line evaluation records (append-only). |
+### Generated Artifacts
+| File | Location | Description |
+|------|----------|-------------|
+| `generated_<provider>_<model>.jsonl` | `ft_evals/` | Auto-created dataset during generation modes (unless custom name). |
+| `dataset_eval_comparison.csv` | `training_datasets/evals/` | Aggregated rubric means (dataset mode). |
+| `ft_evals_comparison.csv` | `ft_evals/` | Aggregated rubric means (generate modes). |
+| `eval_results_<answers>__judged_by_<judge>.jsonl` | mode dir | Append-only raw judge records. |
 
-### Quick Peek at Aggregated Scores
-After a run:
+### Viewing Aggregated Scores
 ```cmd
-type evaluation_comparison.csv
+type data\arabic\training_datasets\evals\dataset_eval_comparison.csv
+type data\arabic\ft_evals\ft_evals_comparison.csv
 ```
 
 ---
@@ -186,8 +257,8 @@ type evaluation_comparison.csv
 ```text
 1. (Optional) Build / refresh training dataset with create_dataset_script.py
 2. Fine-tune or adapt your target model externally using produced JSONL
-3. Run evaluate.py --mode dataset on the tuned model's generated dataset
-4. Or let evaluate.py generate answers directly, then score them
+3. Run cp_eval.py --mode dataset on the tuned model's generated dataset
+4. Or let cp_eval.py generate answers directly, then score them
 5. Track progress across models in evaluation_comparison.csv
 ```
 
