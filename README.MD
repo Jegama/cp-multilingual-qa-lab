@@ -18,12 +18,12 @@ Building high‑quality, reformed, multilingual Q&A datasets for Calvinist Parro
 |------|---------|
 | Data Sources | Curated Arabic (and future English) Christian Q&A from GotQuestions + catechism material. |
 | Dataset Builder | `create_dataset_script.py` merges sources and rewrites answers via a controllable ParrotAI chain. |
-| Evaluation | `cp_eval.py` generates or scores model answers on a fixed 100‑question evaluation set with rubric aggregation. |
+| LLM Evaluation | `cp_eval_llms.py` generates or scores model answers on a fixed 100‑question evaluation set with rubric aggregation. |
 | Outputs | Training JSONL (messages format), evaluation comparison CSV, per‑run JSONL judge results. |
 
 ---
 
-# Current Evals
+# Current LLM Evals
 
 ## Dataset Evaluations
 Current aggregated rubric means from `data/arabic/training_datasets/evals/dataset_eval_comparison.csv`:
@@ -81,7 +81,7 @@ data/
 	english/                          # (Future expansion: mirrors arabic/ layout)
 parrot_ai/                          # Core chain + evaluation engine components
 create_dataset_script.py            # Build / enrich training dataset
-cp_eval.py                          # Unified generation + evaluation CLI (language + mode aware)
+cp_eval_llms.py                          # Unified generation + evaluation CLI (language + mode aware)
 ```
 
 ---
@@ -95,7 +95,7 @@ Each line: a JSON object with at least:
 		{"role": "user", "content": "<question>"},
 		{"role": "assistant", "content": "<answer>"}
 	],
-	"gen_model": "google:gemma-3-7b",          // (present when produced via cp_eval.py --mode generate-*)
+	"gen_model": "google:gemma-3-27b",          // (present when produced via cp_eval_llms.py --mode generate-*)
 	"provider": "openai|together|...",          // optional
 	"timestamp": "2025-08-13T12:34:56.000000"   // ISO8601
 }
@@ -166,7 +166,7 @@ more data\arabic\ar_training_dataset_gemma.jsonl
 
 ---
 
-## 2. Evaluation & Answer Generation (`cp_eval.py`)
+## 2. Evaluation & Answer Generation (`cp_eval_llms.py`)
 ### Capabilities
 1. Evaluate an existing training dataset (`--mode dataset`).
 2. Generate answers using a provider model (OpenAI‑style or Together) and evaluate in one pass (`--mode generate-openai|generate-together`).
@@ -212,7 +212,7 @@ Relative override filenames are rooted into these directories; absolute paths ar
 ### Typical Workflows (Arabic examples)
 Evaluate an existing training dataset (auto‑inferred questions file):
 ```cmd
-python cp_eval.py --language arabic --mode dataset ^
+python cp_eval_llms.py --language arabic --mode dataset ^
 	--dataset data/arabic/training_datasets/ar_training_dataset_gemma.jsonl ^
 	--answers-label gemma-12b ^
 	--judge-model gpt-5-mini
@@ -220,14 +220,14 @@ python cp_eval.py --language arabic --mode dataset ^
 
 Generate via OpenAI provider then evaluate (questions file auto inferred):
 ```cmd
-python cp_eval.py --language arabic --mode generate-openai ^
+python cp_eval_llms.py --language arabic --mode generate-openai ^
 	--gen-model gpt-5-mini ^
 	--answers-label gpt-5-mini
 ```
 
 Generate via Together provider without specifying answers label (will default to `--gen-model`):
 ```cmd
-python cp_eval.py --language arabic --mode generate-together ^
+python cp_eval_llms.py --language arabic --mode generate-together ^
 	--gen-model meta-llama/Llama-4-Scout-17B-16E-Instruct ^
 	--answers-label llama-4-scout-17b-16e-instruct
 ```
@@ -257,8 +257,8 @@ type data\arabic\ft_evals\ft_evals_comparison.csv
 ```text
 1. (Optional) Build / refresh training dataset with create_dataset_script.py
 2. Fine-tune or adapt your target model externally using produced JSONL
-3. Run cp_eval.py --mode dataset on the tuned model's generated dataset
-4. Or let cp_eval.py generate answers directly, then score them
+3. Run cp_eval_llms.py --mode dataset on the tuned model's generated dataset
+4. Or let cp_eval_llms.py generate answers directly, then score them
 5. Track progress across models in evaluation_comparison.csv
 ```
 
