@@ -1,6 +1,6 @@
 # **Sermon Evaluation Framework**
 
-This framework defines a two–step process for evaluating Christian sermons (expository / Christ‑centered) in a structured, reproducible way.
+This framework defines a two–step process for evaluating Christian sermons (expository / Christ‑centered) in a structured, reproducible way. Based on Bryan Chappell's book, Christ-Centered Preaching.
 
 ---
 
@@ -163,44 +163,45 @@ Compute rolled‑up composite categories for dashboards by averaging related raw
 
 Each top‑level category contains its sub‑criteria as keys with spaces. Feedback resides under the same category. Confidence is a top‑level scalar.
 
-| Category | Sub‑Criterion | Sermon A | Sermon B | Notes Example |
-| -------- | ------------- | -------- | -------- | ------------- |
-| Introduction | FCF Introduced | 5 | 4 | Clear FCF vs. implicit |
-|  | Arouses Attention | 4 | 3 | Hook long in B |
-|  | Feedback | Strong tension; trim hook | Less focus | Summary feedback per category |
-| Proposition | Principle + Application Wed | 5 | 4 | B lacks application clause |
-|  | Establishes Main Theme | 5 | 5 | Both strong |
-|  | Summarizes Introduction | 5 | 3 | Terminology drift |
-|  | Feedback | Crisp & repeatable | Needs terminological alignment |  |
-| Main Points | Clarity | 5 | 4 | Point 3 vague in B |
-|  | Hortatory Universal Truths | 4 | 3 | Narrative phrasing only |
-|  | Proportional & Coexistent | 4 | 3 | Overweight point 1 |
-|  | Exposition Quality | 5 | 4 | Minor lexical omission |
-|  | Illustration Quality | 3 | 2 | One story dominates |
-|  | Application Quality | 4 | 3 | Generic language |
-|  | Feedback | Solid structure; tighten illus. 2 | Needs clearer imperatives |  |
-| Exegetical Support | Alignment with Text | 5 | 4 | Slight drift |
-|  | Handles Difficulties | 4 | 3 | Skips hard verse |
-|  | Proof Accuracy & Clarity | 5 | 4 | Loose citation |
-|  | Context & Genre Considered | 4 | 3 | Genre under‑developed |
-|  | Not Belabored | 5 | 5 | Concise |
-|  | Aids Rather Than Impresses | 5 | 4 | Extra Greek aside |
-|  | Feedback | Text governs sermon | Trim ornamental detail |  |
-| Application | Clear & Practical | 4 | 3 | Needs concretes |
-|  | Redemptive Focus | 5 | 4 | Mild moralism |
-|  | Mandate vs Idea Distinction | 4 | 2 | Conflated |
-|  | Passage Supported | 3 | 3 | Needs tighter tie |
-|  | Feedback | Gospel‑driven; label mandates | Clarify authority level |  |
-| Illustrations | Lived‑Body Detail | 4 | 3 | Vividness variance |
-|  | Strengthens Points | 4 | 3 | One tangential |
-|  | Proportion | 3 | 2 | Time imbalance |
-|  | Feedback | Trim length & diversify | Reduce anecdote weight |  |
-| Conclusion | Summary | 5 | 4 | Partial recap |
-|  | Compelling Exhortation | 4 | 3 | Generic call |
-|  | Climax | 4 | 2 | Energy drop |
-|  | Pointed End | 5 | 4 | Soft landing |
-|  | Feedback | Strong landing; heighten climax | Sharpen summons |  |
-| Confidence | Confidence | 0.90 | 0.78 | Transcript noise in B |
+| Category | Sub‑Criterion | Sermon A | Sermon B |
+| -------- | ------------- | -------- | -------- |
+| Introduction | FCF Introduced | 5 | 4 |
+|  | Arouses Attention | 4 | 3 |
+|  | Feedback | Strong tension; trim hook | Less focus |
+| Proposition | Principle + Application Wed | 5 | 4 |
+|  | Establishes Main Theme | 5 | 5 |
+|  | Summarizes Introduction | 5 | 3 |
+|  | Feedback | Crisp & repeatable | Needs terminological alignment |
+| Main Points | Clarity | 5 | 4 |
+|  | Hortatory Universal Truths | 4 | 3 |
+|  | Proportional & Coexistent | 4 | 3 |
+|  | Exposition Quality | 5 | 4 |
+|  | Illustration Quality | 3 | 2 |
+|  | Application Quality | 4 | 3 |
+|  | Feedback | Solid structure; tighten illus. 2 | Needs clearer imperatives |
+| Exegetical Support | Alignment with Text | 5 | 4 |
+|  | Handles Difficulties | 4 | 3 |
+|  | Proof Accuracy & Clarity | 5 | 4 |
+|  | Context & Genre Considered | 4 | 3 |
+|  | Not Belabored | 5 | 5 |
+|  | Aids Rather Than Impresses | 5 | 4 |
+|  | Feedback | Text governs sermon | Trim ornamental detail |
+| Application | Clear & Practical | 4 | 3 |
+|  | Redemptive Focus | 5 | 4 |
+|  | Mandate vs Idea Distinction | 4 | 2 |
+|  | Passage Supported | 3 | 3 |
+|  | Feedback | Gospel‑driven; label mandates | Clarify authority level |
+| Illustrations | Lived‑Body Detail | 4 | 3 |
+|  | Strengthens Points | 4 | 3 |
+|  | Proportion | 3 | 2 |
+|  | Feedback | Trim length & diversify | Reduce anecdote weight |
+| Conclusion | Summary | 5 | 4 |
+|  | Compelling Exhortation | 4 | 3 |
+|  | Climax | 4 | 2 |
+|  | Pointed End | 5 | 4 |
+|  | Feedback | Strong landing; heighten climax | Sharpen summons |
+| Confidence | Confidence | 0.90 | 0.78 |
+
 ---
 
 ## Common Strength Indicators
@@ -224,15 +225,15 @@ Each top‑level category contains its sub‑criteria as keys with spaces. Feedb
 
 ## Example Partial Evaluation Table (Derived Aggregations)
 
-| Aggregated Criterion | Value | Derivation (illustrative) |
-| --------------------- | ----- | ------------------------- |
-| Textual_Fidelity | 4.25 | Avg(Exegetical Support: Alignment, Difficulties, Proof Accuracy, Context) |
-| Proposition_Clarity | 5.0 | Avg(Proposition: Principle+Application, Main Theme, Summarizes Intro) |
-| FCF_Identification | 5 | Introduction: FCF Introduced |
-| Application_Effectiveness | 3.6 | Avg(Application sub‑criteria + Main Points.Application Quality) |
-| Structure_Cohesion | 4.2 | Main Points.Proportional & Coexistent + Conclusion cluster |
-| Illustrations | 3.7 | Main Points.Illustration Quality + Illustrations trio |
-| Overall_Impact | 4 | Weighted narrative synthesis |
+| Aggregated Criterion | Value |
+| --------------------- | ----- |
+| Textual_Fidelity | 4.25 |
+| Proposition_Clarity | 5.0 |
+| FCF_Identification | 5 |
+| Application_Effectiveness | 3.6 |
+| Structure_Cohesion | 4.2 |
+| Illustrations | 3.7 |
+| Overall_Impact | 4 |
 
 ---
 
