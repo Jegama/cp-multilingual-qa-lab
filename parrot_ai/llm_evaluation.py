@@ -16,8 +16,9 @@ to a module-level ``default_engine`` instance so existing notebooks continue to 
 from typing import List, Tuple, Dict, Any, Optional, Iterable
 from pydantic import BaseModel
 from openai import OpenAI
-import json
+from tqdm import tqdm
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -418,33 +419,44 @@ class EvaluationEngine:
         """
         out: list[dict] = []
         processed = 0
-        # Determine total for progress display (simple, no over-engineering)
+        # Determine total length for progress bar
         total: Optional[int] = None
+        try:
+            total = len(pairs)  # type: ignore[arg-type]
+        except Exception:  # noqa: BLE001
+            total = None
         if limit is not None:
-            total = limit
-        else:
+            if total is None:
+                total = limit
+            else:
+                total = min(total, limit)
+
+        use_bar = False
+        bar = None
+        if progress:
             try:
-                total = len(pairs)  # type: ignore[arg-type]
-            except Exception:  # noqa: BLE001
-                total = None
+                bar = tqdm(total=total, desc="Evaluating", unit="qa")
+                use_bar = True
+            except Exception:  # pragma: no cover - fallback if tqdm missing
+                use_bar = False
+
         for i, (q, a) in enumerate(pairs):
             if limit is not None and processed >= limit:
                 break
             try:
                 res = self.evaluate(q, a)
                 out.append({"index": i, "question": q, "evaluation": res})
-                if progress:
-                    if total:
-                        print(f"✓ Evaluated {processed+1}/{total}")
-                    else:
-                        print(f"✓ Evaluated {processed+1}")
             except Exception as e:  # noqa: BLE001
                 if stop_on_error:
+                    if use_bar and bar is not None:
+                        bar.close()
                     raise
                 out.append({"index": i, "question": q, "error": str(e)})
-                if progress:
-                    print(f"✗ Failed {processed+1}: {e}")
             processed += 1
+            if use_bar and bar is not None:
+                bar.update(1)
+        if use_bar and bar is not None:
+            bar.close()
         return out
 
     # -------------- Dataset convenience --------------
