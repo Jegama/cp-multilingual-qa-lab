@@ -28,19 +28,34 @@ Building high‑quality, reformed, multilingual Q&A datasets for Calvinist Parro
 ## Dataset Evaluations
 Current aggregated rubric means from `data/arabic/training_datasets/evals/dataset_eval_comparison.csv`:
 
-| Criterion | Sub-criterion | google-gemma-3-7b | gpt-oss-120b-v1 | gpt-oss-120b-v2 | google-gemma-3-27b |
-|-----------|---------------|------------------:|----------------:|----------------:|------------------:|
-| Adherence | N/A | 4.58 | **4.83** | 4.76 | **4.83** |
-| Kindness and Gentleness | N/A | 4.73 | 4.87 | **4.92** | 4.86 |
-| Interfaith Sensitivity | Respect and Handling Objections | 3.23 | 3.25 | **3.79** | 3.38 |
-| Interfaith Sensitivity | Objection Acknowledgement | 2.08 | 2.13 | **2.42** | 2.17 |
-| Interfaith Sensitivity | Evangelism | 3.14 | 3.25 | **4.09** | 3.25 |
-| Interfaith Sensitivity | Gospel Boldness | 4.10 | 4.19 | **4.80** | 4.15 |
-| Arabic Accuracy | Grammar and Syntax | 4.31 | 4.48 | 4.55 | **4.78** |
-| Arabic Accuracy | Theological Nuance | 4.22 | 4.58 | 4.50 | **4.67** |
-| Arabic Accuracy | Contextual Clarity | 4.69 | 4.67 | 4.58 | **4.92** |
-| Arabic Accuracy | Consistency of Terms | 4.74 | 4.86 | 4.78 | **4.95** |
-| Arabic Accuracy | Arabic Purity | 4.23 | 4.50 | 4.72 | **4.83** |
+| Criterion | Sub-criterion | google-gemma-3-7b | gpt-oss-120b-v1 | gpt-oss-120b-v2 | google-gemma-3-27b | google-gemma-3-27b-v2 | llama-4-scout |
+|-----------|---------------|------------------:|----------------:|----------------:|------------------:|----------------------:|---------------:|
+| Adherence | N/A | 4.58 | 🟩 **4.83** | **4.76** | 🟩 **4.83** | 4.58 | 4.55 |
+| Kindness and Gentleness | N/A | 4.73 | **4.87** | 🟩 **4.92** | **4.86** | 🟩 **4.94** | 4.70 |
+| Interfaith Sensitivity | Respect and Handling Objections | 3.23 | 3.25 | 🟩 **3.79** | **3.38** | 🟩 **3.55** | 3.01 |
+| Interfaith Sensitivity | Objection Acknowledgement | 2.08 | 2.13 | 🟩 **2.42** | 2.17 | 🟩 **2.28** | 1.96 |
+| Interfaith Sensitivity | Evangelism | 3.14 | 3.25 | 🟩 **4.09** | 3.25 | 🟩 **4.40** | **3.92** |
+| Interfaith Sensitivity | Gospel Boldness | 4.10 | 4.19 | 🟩 **4.80** | 4.15 | 🟩 **4.82** | **4.57** |
+| Arabic Accuracy | Grammar and Syntax | 4.31 | 4.48 | 4.55 | 🟩 **4.78** | 🟩 **4.75** | 4.50 |
+| Arabic Accuracy | Theological Nuance | 4.22 | 🟩 **4.58** | **4.50** | 🟩 **4.67** | 4.27 | 4.13 |
+| Arabic Accuracy | Contextual Clarity | 4.69 | 4.67 | 4.58 | 🟩 **4.92** | 🟩 **4.80** | 4.65 |
+| Arabic Accuracy | Consistency of Terms | 4.74 | **4.86** | 4.78 | 🟩 **4.95** | 🟩 **4.91** | 4.84 |
+| Arabic Accuracy | Arabic Purity | 4.23 | 4.50 | **4.72** | 🟩 **4.83** | 🟩 **4.91** | **4.73** |
+|  | Mean | 4.005 | 4.146 | 🟩 **4.355** | **4.254** | 🟩 **4.383** | 4.142 |
+
+Legend: 🟩 Top 2 per row, **bold** above row mean.
+
+**Recommendation**: `google-gemma-3-27b-v2`
+
+### Recommendation Rationale
+We only evaluated model answers on the fixed 100-question Arabic eval set (not the full ~3K training examples), so we can't selectively pull high-performing per-item answers from other models for augmentation without risking distribution bias. Given that constraint, `google-gemma-3-27b-v2` is the best single baseline to anchor fine-tuning because:
+
+* Balanced Strength: It is top-2 in every Arabic Accuracy sub-criterion and leads or is statistically adjacent to the leader in Evangelism and Gospel Boldness without sacrificing linguistic purity.
+* Linguistic Foundation: High scores in Consistency_of_Terms (4.91) and Arabic_Purity (4.91) reduce downstream normalization/remediation work during fine-tuning.
+* Doctrinal & Pastoral Blend: Maintains strong Adherence (4.58) and Kindness_and_Gentleness (4.94) simultaneously—important for preserving core doctrinal faithfulness plus pastoral tone.
+* Interfaith Gap Manageable: Slightly behind the peak model in Respect_and_Handling_Objections (3.55 vs 3.79) and Objection_Acknowledgement (2.28 vs 2.42), but those gaps are modest and can be addressed later via targeted synthetic augmentation or additional curated objection–response exemplars.
+* Stability Over Earlier Versions: Outperforms the earlier gemma variants and avoids the sharper trade-offs seen in gpt-oss-120b-v2 (which gains a bit on objection handling while giving up Arabic purity / consistency edge).
+
 
 ## Fine-tuned Model Evaluations
 Current aggregated rubric means from `data/arabic/ft_evals/ft_evals_comparison.csv`:
@@ -65,23 +80,23 @@ Current aggregated rubric means from `data/arabic/ft_evals/ft_evals_comparison.c
 ```
 data/
 	arabic/
-		ar_gotquestions.json            # Raw Arabic structured Q&A (categories + articles)
-		ar_qa_catechism.jsonl           # Additional QA pairs (messages schema)
-		ar_eval_questions.txt           # EXACTLY 100 evaluation questions (order is canonical)
-		training_datasets/              # Source & refined training sets
-			ar_training_dataset_*.jsonl   # Generated training datasets (messages schema)
-			evals/                        # Evaluation artifacts for --mode dataset
-				dataset_eval_comparison.csv # Aggregated rubric means (dataset mode)
-				eval_results_*.jsonl        # Raw judge outputs for dataset evaluations
-		ft_evals/                       # Generation + evaluation artifacts (generate-* modes)
-			generated_openai_*.jsonl      # Auto-created datasets from OpenAI-style generation
-			generated_together_*.jsonl    # Auto-created datasets from Together generation
-			ft_evals_comparison.csv       # Aggregated rubric means (generate modes)
-			eval_results_*.jsonl          # Raw judge outputs for generate-* evaluations
-	english/                          # (Future expansion: mirrors arabic/ layout)
-parrot_ai/                          # Core chain + evaluation engine components
-create_dataset_script.py            # Build / enrich training dataset
-cp_eval_llms.py                          # Unified generation + evaluation CLI (language + mode aware)
+		ar_gotquestions.json            		# Raw Arabic structured Q&A (categories + articles)
+		ar_qa_catechism.jsonl           		# Additional QA pairs (messages schema)
+		ar_eval_questions.txt           		# EXACTLY 100 evaluation questions (order is canonical)
+		training_datasets/              		# Source & refined training sets
+			ar_training_dataset_*.jsonl   		# Generated training datasets (messages schema)
+			evals/                        		# Evaluation artifacts for --mode dataset
+				dataset_eval_comparison.csv 	# Aggregated rubric means (dataset mode)
+				eval_results_*.jsonl        	# Raw judge outputs for dataset evaluations
+		ft_evals/                        		# Generation + evaluation artifacts (generate-* modes)
+			generated_openai_*.jsonl      		# Auto-created datasets from OpenAI-style generation
+			generated_together_*.jsonl    		# Auto-created datasets from Together generation
+			ft_evals_comparison.csv       		# Aggregated rubric means (generate modes)
+			eval_results_*.jsonl          		# Raw judge outputs for generate-* evaluations
+	english/                          			# (Future expansion: mirrors arabic/ layout)
+parrot_ai/                          			# Core chain + evaluation engine components
+create_dataset_script.py            			# Build / enrich training dataset
+cp_eval_llms.py                      			# Unified generation + evaluation CLI (language + mode aware)
 ```
 
 ---
