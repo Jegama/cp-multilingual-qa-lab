@@ -353,7 +353,7 @@ The current manifest defines:
 - Provider leaders: GPT-5 Mini, Gemini 3 Flash, Claude Haiku 4.5, and Grok 4.1 Fast.
 - English's full 500-question set (`limit: 0`).
 
-Each operation runs in an isolated Python subprocess and writes to its own file under `data/english/api_evals/logs/`, so parallel output does not become interleaved. Existing generated datasets and per-question judge results are reused, so rerunning the command resumes missing work instead of restarting the round. A failed generation skips only contender evaluations that depend on its dataset; independent work is allowed to finish, and neither the registry nor the master CSV is updated until the selected operation graph succeeds.
+Each operation runs in an isolated Python subprocess and writes to its own file under `data/english/api_evals/logs/`, so parallel output does not become interleaved. The parent runner shows one live tqdm bar per active worker, switching each bar from generation to judging as the operation advances; pass `--no-live-progress` to suppress them. Existing generated datasets and per-question judge results are reused, so rerunning the command resumes missing work instead of restarting the round. A failed generation skips only contender evaluations that depend on its dataset; independent work is allowed to finish, and neither the registry nor the master CSV is updated until the selected operation graph succeeds.
 
 Run one phase explicitly or override concurrency when useful:
 

@@ -85,6 +85,7 @@ def generate_dataset(
     use_system_prompt: bool = False,
     limit: int = 100,
     system_prompt_label: Optional[str] = None,
+    progress: bool = True,
 ) -> str:
     # Load questions (limit=None means all if limit is 0)
     load_limit = None if limit == 0 else limit
@@ -101,6 +102,7 @@ def generate_dataset(
         provider=provider,
         model=gen_model,
         system=system_prompt if use_system_prompt else None,
+        progress=progress,
     )
 
     out_path = Path(output_dataset)
@@ -465,6 +467,7 @@ def main(argv: List[str]) -> int:
                     args.use_system_prompt,
                     limit=args.limit,
                     system_prompt_label=args.system_prompt_label,
+                    progress=not args.no_progress,
                 )
             )
             print(f"[generate] Dataset ready at {dataset_path}")
@@ -556,6 +559,7 @@ def main(argv: List[str]) -> int:
                 provider=args.provider,
                 model=args.gen_model,
                 system=_load_system_prompt(engine, args.use_system_prompt),
+                progress=not args.no_progress,
             )
             # Append retried answers to the JSONL and update q_to_a
             retried = 0
