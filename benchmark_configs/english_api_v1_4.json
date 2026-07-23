@@ -1,0 +1,59 @@
+{
+  "language": "english",
+  "eval_version": "v2",
+  "system_prompt_label": "v1_4",
+  "use_system_prompt": true,
+  "default_judge_model": "gpt-5-mini",
+  "max_parallel_operations": 4,
+  "limit": 0,
+  "timezone": "America/Chicago",
+  "question_tags": "data/english/en_question_tags.json",
+  "master_csv": "data/english/api_evals_master.csv",
+  "api_evals_dir": "data/english/api_evals",
+  "result_registry": "benchmark_configs/english_api_registry.json",
+  "models": [
+    {
+      "provider": "xai",
+      "model": "grok-4.5"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "judge_contender": true
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.6-flash"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.5-flash-lite"
+    }
+  ],
+  "provider_leaders": [
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "answers_label": "openai-gpt-5-mini-v1_4",
+      "dataset": "data/english/api_evals/generated_api_openai_openai-gpt-5-mini-v1_4.jsonl"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3-flash",
+      "answers_label": "google-gemini-3-flash-v1_4",
+      "dataset": "data/english/api_evals/generated_api_google_google-gemini-3-flash-v1_4.jsonl"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5",
+      "answers_label": "anthropic-claude-haiku-4-5-v1_4",
+      "dataset": "data/english/api_evals/generated_api_anthropic_anthropic-claude-haiku-4-5-v1_4.jsonl"
+    },
+    {
+      "provider": "xai",
+      "model": "grok-4.1-fast",
+      "answers_label": "xai-grok-4-1-fast-v1_4",
+      "dataset": "data/english/api_evals/generated_api_xai_xai-grok-4-1-fast-v1_4.jsonl"
+    }
+  ]
+}

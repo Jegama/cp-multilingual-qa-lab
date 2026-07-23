@@ -55,6 +55,7 @@ data/
 			eval_results_*.jsonl	      		# Raw judge outputs for API evaluations
 			generated_*.jsonl              		# Auto-created datasets from API generation
 	english/	                          		# English Q&A data (500 eval questions, mirrors arabic/ layout)
+		api_evals_master.csv                    # Vertical dashboard-ready API benchmark runs
 	sermons                      	  			# Example sermon audio inputs (mp3, wav, m4a)
 	sermons_evals                 	 			# Sermon evaluation outputs (step1/step2 JSON, aggregated CSV, Markdown)
 parrot_ai/                          			# Core chain + evaluation engine components
@@ -65,6 +66,8 @@ parrot_ai/                          			# Core chain + evaluation engine componen
 		data_loading.py             			# QA pair and evaluation question loaders
 cp_create_dataset.py            				# Build / enrich training dataset
 cp_eval_llms.py                      			# Unified generation + evaluation CLI (language + mode aware)
+cp_eval_benchmark.py                 			# Manifest-driven generation + cross-judge benchmark workflow
+cp_build_eval_master.py              			# Retrospective master CSV builder from raw result JSONL
 cp_eval_sermons.py                  			# Two‑step sermon evaluation (audio) with aggregated CSV + Markdown
 ```
 
@@ -294,10 +297,81 @@ Canonical file auto-inferred unless you pass `--questions-file`. Prefix: `ar_` o
 | `--use-system-prompt` | generate-* | Prepend & log system prompt from prompts module. |
 | `--limit` | all | Number of questions to evaluate (default: 100). Use `--limit 0` for all questions. **English has 500 questions and requires `--limit 0`.** |
 | `--comparison-csv` | all | Override output CSV filename (stored in mode directory when relative). |
+| `--skip-comparison-csv` | all | Skip the legacy transposed CSV update; used by the batch workflow. |
 | `--results-jsonl` | all | Override raw per-run JSONL results filename. |
 | `--output-dataset` | generate-* | Override generated dataset filename (stored in mode directory when relative). |
 | `--overwrite` | all | Overwrite existing column if `answers-label` already present; else a numeric suffix is auto-added. |
 | `--no-progress` | all | Suppress progress ticks during evaluation. |
+
+### Complete English API Benchmark Round
+
+The manifest-driven runner replaces the manual sequence of generation commands and dataset re-evaluations:
+
+```bash
+# Preview a readable plan without making API calls
+python cp_eval_benchmark.py --dry-run
+
+# Include the exact underlying cp_eval_llms.py commands when troubleshooting
+python cp_eval_benchmark.py --dry-run --show-commands
+
+# Execute the resumable plan
+python cp_eval_benchmark.py
+```
+
+The default manifest is `benchmark_configs/english_api_v1_4.json`. For a future round, update its human-editable `models` list:
+
+```json
+{
+  "default_judge_model": "gpt-5-mini",
+  "max_parallel_operations": 4,
+  "result_registry": "benchmark_configs/english_api_registry.json",
+  "models": [
+    {"provider": "xai", "model": "grok-4.5"},
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "judge_contender": true
+    },
+    {"provider": "google", "model": "gemini-3.6-flash"}
+  ]
+}
+```
+
+Every listed model generates a fresh answer set and is scored by `default_judge_model`. An `answers_label` is derived automatically as `{provider}-{model}-{system_prompt_label}`; specify `answers_label` on a model only when an override is needed.
+
+Models marked `judge_contender` are also used as judges. Each contender scores the deduplicated union of every new answer set and the configured `provider_leaders`. With multiple contenders, each one runs that complete comparison independently. If a contender has the same model ID as the default judge, already-completed default-judge evaluations are not repeated.
+
+`max_parallel_operations` is a concurrency ceiling, not a fixed batch size. The dependency-aware scheduler starts up to that many ready operations, gives generation work priority, uses provider-leader evaluations to fill otherwise unused slots, and unlocks each new-model contender evaluation as soon as that model's generated dataset is complete. Override the manifest for one run with `--jobs`; use `--jobs 1` for fully sequential execution.
+
+`result_registry` is the canonical append-only list of runs included in the master CSV. It is seeded with the original 25 dashboard runs. After a selected benchmark operation graph succeeds, its validated result files are appended atomically in deterministic plan order; existing paths are deduplicated. Changing the active `models` list therefore never removes earlier master rows. `provider_leaders` remains manually maintained and is never changed automatically.
+
+The current manifest defines:
+
+- New answer sets: Grok 4.5, GPT-5.6 Luna, Gemini 3.6 Flash, and Gemini 3.5 Flash-Lite.
+- Default judge: GPT-5 Mini.
+- Judge contender: GPT-5.6 Luna.
+- Provider leaders: GPT-5 Mini, Gemini 3 Flash, Claude Haiku 4.5, and Grok 4.1 Fast.
+- English's full 500-question set (`limit: 0`).
+
+Each operation runs in an isolated Python subprocess and writes to its own file under `data/english/api_evals/logs/`, so parallel output does not become interleaved. Existing generated datasets and per-question judge results are reused, so rerunning the command resumes missing work instead of restarting the round. A failed generation skips only contender evaluations that depend on its dataset; independent work is allowed to finish, and neither the registry nor the master CSV is updated until the selected operation graph succeeds.
+
+Run one phase explicitly or override concurrency when useful:
+
+```bash
+python cp_eval_benchmark.py --jobs 4
+python cp_eval_benchmark.py --jobs 1
+python cp_eval_benchmark.py --phase generate
+python cp_eval_benchmark.py --phase cross-judge
+python cp_eval_benchmark.py --phase master
+```
+
+Every completed phase registers its result files and rebuilds `data/english/api_evals_master.csv` from the full registry. To rebuild the master retrospectively without calling a provider:
+
+```bash
+python cp_build_eval_master.py
+```
+
+The master CSV has one row per answer-set/judge run. `answers_label` identifies the answer set as `{provider}-{model}-{prompt}` and remains unchanged when a different judge scores it. `judge_model` and the deterministic `run_id` distinguish runs. Each rubric metric has adjacent `_mean` and `_stdev` columns; deviations are population standard deviations calculated from the same values used for the corresponding published mean. Embedded result timestamps populate `evaluated_at`.
 
 ### Default Artifact Paths
 | Mode Group | Comparison CSV | Results JSONL Directory | Generated Dataset Directory |
