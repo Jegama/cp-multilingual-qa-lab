@@ -215,11 +215,13 @@ def _deduplicate_evaluations(records: Sequence[dict]) -> list[dict]:
 
     by_question: dict[str, dict] = {}
     order: list[str] = []
+    seen_questions: set[str] = set()
     for record in records:
         question = record.get("question")
         if not isinstance(question, str) or not question:
             continue
-        if question not in by_question:
+        if question not in seen_questions:
+            seen_questions.add(question)
             order.append(question)
         if isinstance(record.get("evaluation"), dict):
             by_question[question] = record

@@ -103,3 +103,36 @@ def test_build_master_row_infers_answer_identity_and_latest_timestamp(tmp_path: 
     assert row["adherence_core_mean"] == 3.0
     assert row["adherence_core_stdev"] == 2.0
     assert str(row["run_id"]).startswith("eval_")
+
+
+def test_build_master_row_deduplicates_failed_attempt_before_successful_retry(
+    tmp_path: Path,
+):
+    results = tmp_path / "results.jsonl"
+    _write_jsonl(
+        results,
+        [
+            {
+                "question": "Q1",
+                "answer": "A1",
+                "error": "transient judge failure",
+            },
+            {
+                "question": "Q1",
+                "answer": "A1",
+                "evaluation": _score_payload(5),
+            },
+            {
+                "question": "Q2",
+                "answer": "A2",
+                "evaluation": _score_payload(1),
+            },
+        ],
+    )
+
+    row = build_master_row(ResultSource(results, "v2"), repo_root=tmp_path)
+
+    assert row["question_count"] == 2
+    assert row["error_count"] == 1
+    assert row["adherence_core_mean"] == 3.0
+    assert row["adherence_core_stdev"] == 2.0

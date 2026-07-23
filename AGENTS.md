@@ -15,7 +15,23 @@ CP Evals Lab is a multilingual Reformed Christian Q&A dataset creation and evalu
 
 ## Commands
 
-### Setup
+### Local Development Environment
+
+Use the existing virtualenvwrapper environment for Python commands and tests in this workspace:
+
+```bash
+workon cp_evals
+```
+
+`workon` is registered only in an interactive zsh session. From a non-interactive automation shell, invoke commands through interactive zsh:
+
+```bash
+zsh -ic 'workon cp_evals && python -m pytest -q'
+```
+
+Do not assume `.venv` exists or use the repository's `venv/` directory as the active environment.
+
+### Fresh Setup
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Unix/macOS
