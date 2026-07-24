@@ -49,6 +49,7 @@ from .llm_evals import (
     has_arabic_scripture_citation,
     has_arabic_theological_terminology,
 )
+from .llm_evals.progress_reporting import emit_progress
 
 load_dotenv()
 
@@ -295,6 +296,7 @@ class EvaluationEngine:
                 bar = tqdm(total=total, desc="Evaluating", unit="qa")
             except Exception:  # noqa: BLE001
                 bar = None
+        emit_progress("judging", 0, total)
         for i, (q, a) in enumerate(pairs):
             if limit is not None and processed >= limit:
                 break
@@ -310,6 +312,7 @@ class EvaluationEngine:
             processed += 1
             if bar:
                 bar.update(1)
+            emit_progress("judging", processed, total)
         if bar:
             bar.close()
         return out
@@ -418,6 +421,7 @@ class EvaluationEngine:
             except Exception:
                 bar = None
 
+        emit_progress("generating", 0, len(questions))
         for i, q in enumerate(questions):
             try:
                 answer = wrapper.generate(prompt=q, model=use_model, system=system)
@@ -445,6 +449,7 @@ class EvaluationEngine:
 
             if bar:
                 bar.update(1)
+            emit_progress("generating", i + 1, len(questions))
 
         if bar:
             bar.close()

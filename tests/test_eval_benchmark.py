@@ -1,0 +1,230 @@
+"""Tests for manifest-driven benchmark command construction."""
+
+import threading
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+
+from cp_eval_benchmark import cross_judge_commands, generation_commands, run_benchmark
+from parrot_ai.llm_evals.benchmark_config import (
+    expected_dynamic_sources,
+    load_benchmark_config,
+)
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_PATH = REPO_ROOT / "benchmark_configs/english_api_v1_4.json"
+
+
+def test_manifest_builds_four_generation_and_eight_cross_judge_commands():
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+
+    generation = generation_commands(config)
+    cross_judge = cross_judge_commands(config)
+
+    assert len(generation) == 4
+    assert len(cross_judge) == 8
+    assert config.default_judge_model == "gpt-5-mini"
+    assert config.max_parallel_operations == 4
+    assert [target.gen_model for target in config.judge_contenders] == [
+        "gpt-5.6-luna"
+    ]
+    assert all("--skip-comparison-csv" in command for command in generation)
+    assert all("--skip-comparison-csv" in command for command in cross_judge)
+    assert all("gpt-5.6-luna" in command for command in cross_judge)
+    assert len(expected_dynamic_sources(config)) == 12
+
+    luna_command = next(
+        command
+        for command in generation
+        if "openai-gpt-5.6-luna-v1_4" in command
+    )
+    assert "gpt-5.6-luna" in luna_command
+    assert "gpt-5-mini" in luna_command
+
+
+def test_dry_run_is_human_readable_and_never_calls_provider_evaluation(capsys):
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+
+    def fail_if_called(_: list[str]) -> int:
+        raise AssertionError("dry run called cp_eval_llms")
+
+    run_benchmark(
+        config,
+        phase="all",
+        dry_run=True,
+        run_evaluation=fail_if_called,
+    )
+
+    output = capsys.readouterr().out
+    assert "Benchmark plan" in output
+    assert "Default judge: gpt-5-mini" in output
+    assert "openai:gpt-5.6-luna [judge contender]" in output
+    assert "total provider evaluation operations: 12" in output
+    assert "english_api_registry.json" in output
+    assert "python cp_eval_llms.py" not in output
+
+
+def test_show_commands_adds_exact_shell_commands(capsys):
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+
+    run_benchmark(
+        config,
+        phase="generate",
+        dry_run=True,
+        show_commands=True,
+        run_evaluation=lambda _: 0,
+    )
+
+    assert "$ python cp_eval_llms.py" in capsys.readouterr().out
+
+
+def test_each_contender_judges_new_models_and_provider_leaders():
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+    targets = list(config.generation_targets)
+    targets[0] = replace(targets[0], judge_contender=True)
+    two_contenders = replace(config, generation_targets=tuple(targets))
+
+    commands = cross_judge_commands(two_contenders)
+
+    assert len(commands) == 16
+    judges = [command[command.index("--judge-model") + 1] for command in commands]
+    assert judges.count("grok-4.5") == 8
+    assert judges.count("gpt-5.6-luna") == 8
+
+
+def test_contender_matching_default_judge_does_not_repeat_primary_scoring():
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+    targets = list(config.generation_targets)
+    targets[0] = replace(
+        targets[0],
+        judge_contender=True,
+        judge_model=config.default_judge_model,
+    )
+    default_contender = replace(config, generation_targets=tuple(targets))
+
+    commands = cross_judge_commands(default_contender)
+    judges = [command[command.index("--judge-model") + 1] for command in commands]
+
+    assert len(commands) == 12
+    assert judges.count("gpt-5-mini") == 4
+    assert judges.count("gpt-5.6-luna") == 8
+
+
+def test_no_contenders_means_no_additional_judging():
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+    no_contenders = replace(
+        config,
+        generation_targets=tuple(
+            replace(target, judge_contender=False)
+            for target in config.generation_targets
+        ),
+    )
+
+    assert cross_judge_commands(no_contenders) == []
+
+
+def test_single_contender_uses_available_worker_slots_and_waits_for_generation():
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+    contender = next(
+        target for target in config.generation_targets if target.judge_contender
+    )
+    single_contender = replace(config, generation_targets=(contender,))
+
+    lock = threading.Lock()
+    first_wave = threading.Barrier(4)
+    generation_finished = threading.Event()
+    active = 0
+    max_active = 0
+    call_count = 0
+    self_judging_started_after_generation: list[bool] = []
+
+    def run_operation(command: list[str]) -> int:
+        nonlocal active, max_active, call_count
+        mode = command[command.index("--mode") + 1]
+        answers_label = command[command.index("--answers-label") + 1]
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+            call_count += 1
+            ordinal = call_count
+        try:
+            if ordinal <= 4:
+                first_wave.wait(timeout=2)
+            if mode == "generate-api_evals":
+                generation_finished.set()
+            elif answers_label == contender.answers_label:
+                self_judging_started_after_generation.append(
+                    generation_finished.is_set()
+                )
+            return 0
+        finally:
+            with lock:
+                active -= 1
+
+    completed_sources = run_benchmark(
+        single_contender,
+        phase="all",
+        dry_run=False,
+        jobs=4,
+        repo_root=REPO_ROOT,
+        run_evaluation=run_operation,
+    )
+
+    assert call_count == 6
+    assert max_active == 4
+    assert self_judging_started_after_generation == [True]
+    assert len(completed_sources) == 6
+    assert completed_sources[0].path.name.startswith(
+        "eval_results_openai-gpt-5.6-luna-v1_4"
+    )
+
+
+def test_single_contender_dry_run_fills_slots_without_inventing_a_fixed_batch(capsys):
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+    contender = next(
+        target for target in config.generation_targets if target.judge_contender
+    )
+    single_contender = replace(config, generation_targets=(contender,))
+
+    run_benchmark(
+        single_contender,
+        phase="all",
+        dry_run=True,
+        jobs=4,
+        repo_root=REPO_ROOT,
+    )
+
+    output = capsys.readouterr().out
+    assert "Initial worker slots (4/4 used)" in output
+    assert "Ready queue after initial slots (1)" in output
+    assert "Dependency-gated operations (1)" in output
+
+
+def test_failed_generation_skips_only_its_dependent_contender_evaluation():
+    config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+    contender = next(
+        target for target in config.generation_targets if target.judge_contender
+    )
+    single_contender = replace(config, generation_targets=(contender,))
+    called_labels: list[str] = []
+
+    def fail_generation(command: list[str]) -> int:
+        mode = command[command.index("--mode") + 1]
+        answers_label = command[command.index("--answers-label") + 1]
+        called_labels.append(answers_label)
+        return 1 if mode == "generate-api_evals" else 0
+
+    with pytest.raises(RuntimeError, match="1 failed and 1 dependency-skipped"):
+        run_benchmark(
+            single_contender,
+            phase="all",
+            dry_run=False,
+            jobs=4,
+            repo_root=REPO_ROOT,
+            run_evaluation=fail_generation,
+        )
+
+    assert called_labels.count(contender.answers_label) == 1
+    assert len(called_labels) == 5

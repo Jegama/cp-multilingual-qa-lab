@@ -415,8 +415,7 @@ class TestBackwardCompat:
             {"question": "Q2", "evaluation": _full_scores()},
         ]
         agg = aggregate_scores(results, include_arabic_accuracy=False)
-        # Should have all 18 subcriteria + 3 overalls + Final_Overall = 22
-        # 5 adh + 5 kind + 4 inter + adh_overall + kind_overall + inter_overall + final = 18
+        # Includes all rubric fields plus both English summary scores.
         expected_keys = set()
         for section, subs in [
             ("Adherence", ["Core", "Secondary", "Tertiary_Handling", "Biblical_Basis", "Consistency", "Overall"]),
@@ -426,6 +425,7 @@ class TestBackwardCompat:
             for sub in subs:
                 expected_keys.add((section, sub))
         expected_keys.add(("", "Final_Overall"))
+        expected_keys.add(("", "Weighted_Production_Score"))
         assert set(agg.keys()) == expected_keys
 
 

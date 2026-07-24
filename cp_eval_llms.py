@@ -49,76 +49,11 @@ from parrot_ai.llm_evaluation import (
     load_qa_pairs,
     load_eval_questions,
 )
-from parrot_ai.llm_evals import compute_weighted_final_score
-from parrot_ai.evaluation_schemas import (
-    SUBCRITERIA_FLAG_MAP,
-    ALWAYS_ON_SUBCRITERIA,
+from parrot_ai.llm_evals import (
+    aggregate_scores,
+    build_rows_order,
 )
-
-CORE_SECTION_ORDER = [
-    "Adherence",
-    "Kindness_and_Gentleness",
-    "Interfaith_Sensitivity",
-]
-
-CORE_SECTION_SUBCRITERIA = {
-    "Adherence": [
-        "Core",
-        "Secondary",
-        "Tertiary_Handling",
-        "Biblical_Basis",
-        "Consistency",
-        "Overall",
-    ],
-    "Kindness_and_Gentleness": [
-        "Core_Clarity_with_Kindness",
-        "Pastoral_Sensitivity",
-        "Secondary_Fairness",
-        "Tertiary_Neutrality",
-        "Tone",
-        "Overall",
-    ],
-    "Interfaith_Sensitivity": [
-        "Respect_and_Handling_Objections",
-        "Objection_Acknowledgement",
-        "Evangelism",
-        "Gospel_Boldness",
-        "Overall",
-    ],
-}
-
-ARABIC_ACCURACY_SUBCRITERIA = [
-    "Grammar_and_Syntax",
-    "Theological_Nuance",
-    "Contextual_Clarity",
-    "Consistency_of_Terms",
-    "Arabic_Purity",
-    "Overall",
-]
-
-FINAL_OVERALL_ROW = ("", "Final_Overall")
-WEIGHTED_SCORE_ROW = ("", "Weighted_Production_Score")
-
-META_ROWS = [
-    ("Meta", "System_Prompt_Label"),
-    ("Meta", "Judge_Model"),
-]
-
-
-def build_rows_order(include_arabic: bool) -> list[tuple[str, str]]:
-    rows: list[tuple[str, str]] = []
-    for section in CORE_SECTION_ORDER:
-        for sub in CORE_SECTION_SUBCRITERIA[section]:
-            rows.append((section, sub))
-    if include_arabic:
-        for sub in ARABIC_ACCURACY_SUBCRITERIA:
-            rows.append(("Arabic_Accuracy", sub))
-    rows.append(FINAL_OVERALL_ROW)
-    if not include_arabic:
-        rows.append(WEIGHTED_SCORE_ROW)
-    for section, sub in META_ROWS:
-        rows.append((section, sub))
-    return rows
+from parrot_ai.llm_evals.master_csv import infer_dataset_metadata
 
 
 def sanitize_filename(name: str) -> str:
@@ -150,6 +85,7 @@ def generate_dataset(
     use_system_prompt: bool = False,
     limit: int = 100,
     system_prompt_label: Optional[str] = None,
+    progress: bool = True,
 ) -> str:
     # Load questions (limit=None means all if limit is 0)
     load_limit = None if limit == 0 else limit
@@ -166,6 +102,7 @@ def generate_dataset(
         provider=provider,
         model=gen_model,
         system=system_prompt if use_system_prompt else None,
+        progress=progress,
     )
 
     out_path = Path(output_dataset)
@@ -198,139 +135,13 @@ def generate_dataset(
                 "messages": msgs,
                 "gen_model": gen_model,
                 "provider": r.get("provider"),
-                "timestamp": dt.now().isoformat(),
+                "timestamp": dt.now().astimezone().isoformat(),
                 "use_system_prompt": use_system_prompt,
             }
             if system_prompt_label:
                 obj["system_prompt_label"] = system_prompt_label
             f.write(json.dumps(obj, ensure_ascii=False) + "\n")
     return str(out_path)
-
-
-def _build_flag_to_subcriteria_index() -> Dict[tuple, str]:
-    """Build reverse map: (section, subcriteria) -> flag_name."""
-    reverse: Dict[tuple, str] = {}
-    for flag_name, pairs in SUBCRITERIA_FLAG_MAP.items():
-        for pair in pairs:
-            reverse[pair] = flag_name
-    return reverse
-
-
-_SUBCRITERIA_TO_FLAG = _build_flag_to_subcriteria_index()
-
-
-def _is_applicable(
-    section: str, key: str, question_tag: Optional[dict]
-) -> bool:
-    """Check if a (section, key) subcriteria is applicable for a given question tag.
-
-    Returns True (include score) if:
-    - No question tag provided (backward compat)
-    - The subcriteria is always-on (Biblical_Basis, Consistency, Tone)
-    - The subcriteria's controlling flag is True in the tag
-    - The key is "Overall" (handled separately in recomputation)
-    """
-    if question_tag is None:
-        return True
-    if key == "Overall":
-        return False  # Overalls are recomputed from applicable subcriteria
-    pair = (section, key)
-    if pair in ALWAYS_ON_SUBCRITERIA:
-        return True
-    flag_name = _SUBCRITERIA_TO_FLAG.get(pair)
-    if flag_name is None:
-        return True  # Unknown subcriteria -> include (fail open)
-    return bool(question_tag.get(flag_name, True))
-
-
-def aggregate_scores(
-    results: List[dict],
-    include_arabic_accuracy: bool,
-    question_tags: Optional[Dict[str, dict]] = None,
-) -> Dict[tuple, float]:
-    agg: Dict[tuple, float] = {}
-    counts: Dict[tuple, int] = {}
-    # For section overall recomputation: track per-section subcriteria sums
-    section_sub_agg: Dict[str, Dict[str, float]] = {}
-    section_sub_counts: Dict[str, Dict[str, int]] = {}
-
-    target_sections = ["Adherence", "Kindness_and_Gentleness", "Interfaith_Sensitivity"]
-    if include_arabic_accuracy:
-        target_sections.append("Arabic_Accuracy")
-
-    use_tags = question_tags is not None and len(question_tags) > 0
-
-    for item in results:
-        ev = item.get("evaluation")
-        if not ev:
-            continue
-        # Look up question tag if available
-        question_text = item.get("question", "")
-        q_tag = question_tags[question_text] if (use_tags and question_tags and question_text in question_tags) else None
-
-        for section in target_sections:
-            section_obj = ev.get(section, {})
-            if not isinstance(section_obj, dict):
-                continue
-            for key, val in section_obj.items():
-                if key in ("Penalty_Reason", "Heuristic_Arabic_Purity_Pct"):
-                    continue
-                if not isinstance(val, int):
-                    continue
-
-                if use_tags and section != "Arabic_Accuracy":
-                    if not _is_applicable(section, key, q_tag):
-                        continue
-
-                agg[(section, key)] = agg.get((section, key), 0) + val
-                counts[(section, key)] = counts.get((section, key), 0) + 1
-
-                # Track for section overall recomputation
-                if key != "Overall":
-                    if section not in section_sub_agg:
-                        section_sub_agg[section] = {}
-                        section_sub_counts[section] = {}
-                    section_sub_agg[section][key] = (
-                        section_sub_agg[section].get(key, 0) + val
-                    )
-                    section_sub_counts[section][key] = (
-                        section_sub_counts[section].get(key, 0) + 1
-                    )
-
-    means = {k: round(agg[k] / counts[k], 2) for k in agg if counts.get(k)}
-
-    # Recompute section Overalls from applicable subcriteria means when tags are used
-    if use_tags:
-        for section in target_sections:
-            if section == "Arabic_Accuracy":
-                continue  # Arabic Accuracy keeps raw Overall
-            sub_means = []
-            for key, total in section_sub_agg.get(section, {}).items():
-                cnt = section_sub_counts.get(section, {}).get(key, 0)
-                if cnt > 0:
-                    sub_means.append(total / cnt)
-            if sub_means:
-                means[(section, "Overall")] = round(
-                    sum(sub_means) / len(sub_means), 2
-                )
-
-    # Compute Final_Overall as flat average of all section Overalls
-    overall_values = [
-        means[(s, "Overall")]
-        for s in target_sections
-        if (s, "Overall") in means
-    ]
-    if overall_values:
-        means[("", "Final_Overall")] = round(
-            sum(overall_values) / len(overall_values), 2
-        )
-
-    # Compute Weighted_Production_Score for English runs only
-    # (Adherence 40%, Interfaith_Sensitivity 35%, Kindness_and_Gentleness 25%)
-    if not include_arabic_accuracy:
-        means[("", "Weighted_Production_Score")] = compute_weighted_final_score(means)
-
-    return means
 
 
 def ensure_csv_structure(
@@ -494,6 +305,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         help="Override comparison CSV filename (placed automatically in proper directory if relative)",
     )
     p.add_argument(
+        "--skip-comparison-csv",
+        action="store_true",
+        help="Do not update the legacy transposed comparison CSV",
+    )
+    p.add_argument(
         "--results-jsonl",
         help="Override results JSONL filename (auto directory based on mode & language if relative)",
     )
@@ -538,8 +354,8 @@ def infer_answers_label_from_dataset(path: Path) -> str | None:
                 gen_model = obj.get("gen_model")
                 if isinstance(gen_model, str) and gen_model:
                     return gen_model
-                # fallback: maybe system message includes model label? skip for now
-                break
+                # A generated file may begin with a standalone system-prompt record.
+                continue
     except FileNotFoundError:
         return None
     return None
@@ -651,6 +467,7 @@ def main(argv: List[str]) -> int:
                     args.use_system_prompt,
                     limit=args.limit,
                     system_prompt_label=args.system_prompt_label,
+                    progress=not args.no_progress,
                 )
             )
             print(f"[generate] Dataset ready at {dataset_path}")
@@ -680,6 +497,15 @@ def main(argv: List[str]) -> int:
         if inferred_prompt:
             system_prompt_label = inferred_prompt
             print(f"[infer] Using inferred system prompt label: {system_prompt_label}")
+
+    dataset_metadata = infer_dataset_metadata(dataset_path)
+    effective_gen_model = args.gen_model or dataset_metadata.get("gen_model")
+    effective_provider = args.provider or dataset_metadata.get("provider")
+    effective_use_system_prompt = (
+        args.use_system_prompt
+        if generation_mode
+        else dataset_metadata.get("use_system_prompt")
+    )
 
     if not answers_label:
         answers_label = "answers"
@@ -733,6 +559,7 @@ def main(argv: List[str]) -> int:
                 provider=args.provider,
                 model=args.gen_model,
                 system=_load_system_prompt(engine, args.use_system_prompt),
+                progress=not args.no_progress,
             )
             # Append retried answers to the JSONL and update q_to_a
             retried = 0
@@ -751,7 +578,7 @@ def main(argv: List[str]) -> int:
                         "messages": msgs,
                         "gen_model": args.gen_model,
                         "provider": r.get("provider"),
-                        "timestamp": dt.now().isoformat(),
+                        "timestamp": dt.now().astimezone().isoformat(),
                         "use_system_prompt": args.use_system_prompt,
                     }
                     if args.system_prompt_label:
@@ -904,39 +731,42 @@ def main(argv: List[str]) -> int:
     for k in sorted(aggregated):
         print(f"  {k}: {aggregated[k]}")
 
-    # Update comparison CSV
-    rows_order = build_rows_order(include_arabic_accuracy)
-    csv_meta_values: Dict[tuple[str, str], str] = {
-        ("Meta", "Judge_Model"): args.judge_model,
-        ("Meta", "Gen_Model"): args.gen_model if generation_mode else "N/A",
-        ("Meta", "Provider"): args.provider if generation_mode else "N/A",
-    }
-    if system_prompt_label:
-        csv_meta_values[("Meta", "System_Prompt_Label")] = system_prompt_label
-    update_comparison_csv(
-        comparison_csv_path,
-        answers_label,
-        aggregated,
-        overwrite=args.overwrite,
-        rows_order=rows_order,
-        meta_values=csv_meta_values,
-    )
+    # Update the legacy transposed comparison CSV unless the batch workflow opts out.
+    if args.skip_comparison_csv:
+        print("[csv] Skipped legacy comparison CSV update.")
+    else:
+        rows_order = build_rows_order(include_arabic_accuracy)
+        csv_meta_values: Dict[tuple[str, str], str] = {
+            ("Meta", "Judge_Model"): args.judge_model,
+            ("Meta", "Gen_Model"): str(effective_gen_model or "N/A"),
+            ("Meta", "Provider"): str(effective_provider or "N/A"),
+        }
+        if system_prompt_label:
+            csv_meta_values[("Meta", "System_Prompt_Label")] = system_prompt_label
+        update_comparison_csv(
+            comparison_csv_path,
+            answers_label,
+            aggregated,
+            overwrite=args.overwrite,
+            rows_order=rows_order,
+            meta_values=csv_meta_values,
+        )
 
     # Write full results JSONL (overwrite with clean merged set)
     meta = {
         "dataset": str(dataset_path),
         "answers_label": answers_label,
         "judge_model": args.judge_model,
-        "gen_model": args.gen_model,
-        "provider": args.provider if generation_mode else None,
-        "use_system_prompt": args.use_system_prompt if generation_mode else None,
+        "gen_model": effective_gen_model,
+        "provider": effective_provider,
+        "use_system_prompt": effective_use_system_prompt,
         "system_prompt_label": system_prompt_label,
         "questions_file": questions_file,
         "language": args.language,
         "mode": args.mode,
         "extended_sample_size": len(pairs) if args.mode == "extended" else None,
-        "comparison_csv": str(comparison_csv_path),
-        "timestamp": dt.now().isoformat(),
+        "comparison_csv": None if args.skip_comparison_csv else str(comparison_csv_path),
+        "timestamp": dt.now().astimezone().isoformat(),
     }
     if new_results:
         append_results_jsonl(results_jsonl, new_results, meta)
