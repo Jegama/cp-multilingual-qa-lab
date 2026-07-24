@@ -68,6 +68,7 @@ cp_create_dataset.py            				# Build / enrich training dataset
 cp_eval_llms.py                      			# Unified generation + evaluation CLI (language + mode aware)
 cp_eval_benchmark.py                 			# Manifest-driven generation + cross-judge benchmark workflow
 cp_build_eval_master.py              			# Retrospective master CSV builder from raw result JSONL
+cp_judge_calibration.py                         # Streamlit lab for blinded human judge calibration
 cp_eval_sermons.py                  			# Two‑step sermon evaluation (audio) with aggregated CSV + Markdown
 ```
 
@@ -372,6 +373,20 @@ python cp_build_eval_master.py
 ```
 
 The master CSV has one row per answer-set/judge run. `answers_label` identifies the answer set as `{provider}-{model}-{prompt}` and remains unchanged when a different judge scores it. `judge_model` and the deterministic `run_id` distinguish runs. Each rubric metric has adjacent `_mean` and `_stdev` columns; deviations are population standard deviations calculated from the same values used for the corresponding published mean. Embedded result timestamps populate `evaluated_at`.
+
+### Blinded Human Judge Calibration
+
+Use the Streamlit calibration lab to compare any two registered judges on their shared answer sets:
+
+```bash
+streamlit run cp_judge_calibration.py
+```
+
+The Build workspace discovers every shared numeric rubric leaf dynamically, applies the existing question-tag applicability rules, and ranks disagreement by a selectable method. The recommended composite combines normalized absolute mean delta, Pearson disagreement, and Spearman disagreement; the top two rubrics are selected automatically but remain overridable. No interfaith-specific or other rubric names are hardcoded into the selection workflow.
+
+Each saved study mixes blinded pairwise direction trials with a smaller pointwise calibration subset. Pairwise sampling targets strict judge reversals, tie-versus-order conflicts, and random agreement controls. Pointwise sampling covers large score gaps, one-point gaps, and exact judge agreement. The Review workspace hides answer-model identities, providers, judge identities, and scores, while saving each reviewer's progress atomically. The Results workspace reports pairwise human-alignment differences with question-clustered bootstrap intervals, pointwise mean absolute error and weighted kappa, and an auditable CSV export.
+
+By default, studies and reviewer responses are stored under `data/<language>/judge_calibration_studies/`. Study definitions record the selected evaluation context, answer sets, rubrics, sampling seed, disagreement statistics, blinded tasks, and internal judge scores so the analysis is reproducible. The answer-set panel is chosen from data the two judges have actually scored; the workflow does not require cross-judging every historical model.
 
 ### Default Artifact Paths
 | Mode Group | Comparison CSV | Results JSONL Directory | Generated Dataset Directory |

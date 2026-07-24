@@ -51,9 +51,9 @@
     },
     {
       "provider": "xai",
-      "model": "grok-4.1-fast",
-      "answers_label": "xai-grok-4-1-fast-v1_4",
-      "dataset": "data/english/api_evals/generated_api_xai_xai-grok-4-1-fast-v1_4.jsonl"
+      "model": "grok-4.5",
+      "answers_label": "xai-grok-4.5-v1_4",
+      "dataset": "data/english/api_evals/generated_api_xai_xai-grok-4.5-v1_4.jsonl"
     }
   ]
 }

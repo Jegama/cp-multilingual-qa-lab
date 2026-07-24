@@ -86,11 +86,12 @@ def test_invalid_result_does_not_modify_registry(tmp_path: Path):
     assert registry.read_bytes() == before
 
 
-def test_default_registry_is_seeded_with_current_25_runs():
+def test_default_registry_retains_seeded_runs_and_valid_unique_paths():
     repo_root = Path(__file__).resolve().parent.parent
     registry = repo_root / "benchmark_configs/english_api_registry.json"
 
     sources = load_result_registry(registry, repo_root=repo_root)
 
-    assert len(sources) == 25
+    assert len(sources) >= 25
+    assert len({source.path for source in sources}) == len(sources)
     assert all(source.path.exists() for source in sources)
