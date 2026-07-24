@@ -550,7 +550,9 @@ def calculate_metric_statistics(
             if candidate.primary_direction == candidate.comparison_direction == 0
         )
         pair_count = len(candidates)
-        normalized_components = [abs(statistics.fmean(deltas)) / 4]
+        normalized_components = [
+            statistics.fmean(abs(delta) for delta in deltas) / 4
+        ]
         if pearson is not None:
             normalized_components.append((1 - max(-1.0, min(1.0, pearson))) / 2)
         if spearman is not None:

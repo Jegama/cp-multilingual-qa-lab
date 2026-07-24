@@ -229,6 +229,36 @@ def test_composite_ranking_selects_dynamic_high_disagreement_metric():
     assert ranked[0].spearman == pytest.approx(-1.0)
 
 
+def test_composite_disagreement_uses_per_item_gaps_when_deltas_cancel():
+    collapsed_scale = MetricPath(("Any_Section", "Collapsed_Scale"))
+    items = {
+        collapsed_scale: [
+            ScoredItem(
+                collapsed_scale,
+                f"Q{i}",
+                "A",
+                "model",
+                "p",
+                "m",
+                primary,
+                comparison,
+            )
+            for i, (primary, comparison) in enumerate(
+                ((1, 3), (5, 3)),
+                start=1,
+            )
+        ]
+    }
+
+    row = calculate_metric_statistics(items)[0]
+
+    assert row.mean_delta == 0.0
+    assert row.mean_absolute_delta == 2.0
+    assert row.pearson is None
+    assert row.spearman is None
+    assert row.disagreement_index == pytest.approx(0.5)
+
+
 def _study_items(metric: MetricPath) -> list[ScoredItem]:
     items: list[ScoredItem] = []
     for question_index in range(1, 7):
