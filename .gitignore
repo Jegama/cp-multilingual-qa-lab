@@ -18,5 +18,6 @@ C3 Sermon Evals.md
 huggingface/
 *.mp3
 .cache/*
+data/*/judge_calibration_studies/
 data/sermons_evals/*
 *.ps1
