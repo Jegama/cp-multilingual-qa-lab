@@ -17,14 +17,25 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "benchmark_configs/english_api_v1_4.json"
 
 
-def test_manifest_builds_four_generation_and_eight_cross_judge_commands():
+def _unique_answer_set_counts(config) -> tuple[int, int]:
+    generation_labels = {
+        target.answers_label for target in config.generation_targets
+    }
+    all_labels = generation_labels | {
+        target.answers_label for target in config.control_targets
+    }
+    return len(all_labels), len(all_labels - generation_labels)
+
+
+def test_manifest_builds_generation_and_deduplicated_cross_judge_commands():
     config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
 
     generation = generation_commands(config)
     cross_judge = cross_judge_commands(config)
+    answer_set_count, _ = _unique_answer_set_counts(config)
 
-    assert len(generation) == 4
-    assert len(cross_judge) == 8
+    assert len(generation) == len(config.generation_targets)
+    assert len(cross_judge) == answer_set_count
     assert config.default_judge_model == "gpt-5-mini"
     assert config.max_parallel_operations == 4
     assert [target.gen_model for target in config.judge_contenders] == [
@@ -33,7 +44,9 @@ def test_manifest_builds_four_generation_and_eight_cross_judge_commands():
     assert all("--skip-comparison-csv" in command for command in generation)
     assert all("--skip-comparison-csv" in command for command in cross_judge)
     assert all("gpt-5.6-luna" in command for command in cross_judge)
-    assert len(expected_dynamic_sources(config)) == 12
+    assert len(expected_dynamic_sources(config)) == len(generation) + len(
+        cross_judge
+    )
 
     luna_command = next(
         command
@@ -46,6 +59,9 @@ def test_manifest_builds_four_generation_and_eight_cross_judge_commands():
 
 def test_dry_run_is_human_readable_and_never_calls_provider_evaluation(capsys):
     config = load_benchmark_config(CONFIG_PATH, REPO_ROOT)
+    expected_operations = len(generation_commands(config)) + len(
+        cross_judge_commands(config)
+    )
 
     def fail_if_called(_: list[str]) -> int:
         raise AssertionError("dry run called cp_eval_llms")
@@ -61,7 +77,7 @@ def test_dry_run_is_human_readable_and_never_calls_provider_evaluation(capsys):
     assert "Benchmark plan" in output
     assert "Default judge: gpt-5-mini" in output
     assert "openai:gpt-5.6-luna [judge contender]" in output
-    assert "total provider evaluation operations: 12" in output
+    assert f"total provider evaluation operations: {expected_operations}" in output
     assert "english_api_registry.json" in output
     assert "python cp_eval_llms.py" not in output
 
@@ -87,11 +103,12 @@ def test_each_contender_judges_new_models_and_provider_leaders():
     two_contenders = replace(config, generation_targets=tuple(targets))
 
     commands = cross_judge_commands(two_contenders)
+    answer_set_count, _ = _unique_answer_set_counts(two_contenders)
 
-    assert len(commands) == 16
+    assert len(commands) == answer_set_count * 2
     judges = [command[command.index("--judge-model") + 1] for command in commands]
-    assert judges.count("grok-4.5") == 8
-    assert judges.count("gpt-5.6-luna") == 8
+    assert judges.count("grok-4.5") == answer_set_count
+    assert judges.count("gpt-5.6-luna") == answer_set_count
 
 
 def test_contender_matching_default_judge_does_not_repeat_primary_scoring():
@@ -105,11 +122,14 @@ def test_contender_matching_default_judge_does_not_repeat_primary_scoring():
     default_contender = replace(config, generation_targets=tuple(targets))
 
     commands = cross_judge_commands(default_contender)
+    answer_set_count, control_only_count = _unique_answer_set_counts(
+        default_contender
+    )
     judges = [command[command.index("--judge-model") + 1] for command in commands]
 
-    assert len(commands) == 12
-    assert judges.count("gpt-5-mini") == 4
-    assert judges.count("gpt-5.6-luna") == 8
+    assert len(commands) == control_only_count + answer_set_count
+    assert judges.count("gpt-5-mini") == control_only_count
+    assert judges.count("gpt-5.6-luna") == answer_set_count
 
 
 def test_no_contenders_means_no_additional_judging():
